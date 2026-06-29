@@ -1,0 +1,11 @@
+[[contracts]]
+fqn = "invoice_registry::InvoiceRegistry"
+
+[[contracts]]
+fqn = "funding_vault::FundingVault"
+
+[[contracts]]
+fqn = "repayment_escrow::RepaymentEscrow"
+
+[[contracts]]
+fqn = "agent_reputation::AgentReputation"
