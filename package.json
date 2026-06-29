@@ -13,8 +13,7 @@
     "test:e2e": "pnpm --filter @cortex/web test:e2e",
     "test:contracts": "cargo +nightly-2026-01-01 test --manifest-path contracts/Cargo.toml",
     "test:agents": "pnpm --filter @cortex/agents test",
-    "test:shared": "pnpm --filter @cortex/shared test",
-    "demo:seed": "node scripts/seed-demo.mjs"
+    "test:shared": "pnpm --filter @cortex/shared test"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

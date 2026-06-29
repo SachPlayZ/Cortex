@@ -6,8 +6,22 @@ const { Pool } = pg;
 export type InvoicePaymentRecord = {
   id: string;
   invoiceHash: `0x${string}`;
+  title?: string | undefined;
+  sellerAccount?: string | undefined;
+  investorAccount?: string | undefined;
+  originalCurrency?: string | undefined;
+  originalAmountMinor?: string | undefined;
+  usdAmountCents?: string | undefined;
+  advanceAmountUsdCents?: string | undefined;
   repaymentAmountUsdCents: string;
+  investorYieldUsdCents?: string | undefined;
+  riskTier?: string | undefined;
+  riskScore?: number | undefined;
+  discountBps?: number | undefined;
+  dueDate?: string | undefined;
   statusCasper: InvoiceStatus;
+  attestationHash?: `0x${string}` | undefined;
+  agentConfidence?: number | undefined;
   dodoCheckoutSessionId?: string;
   dodoCheckoutUrl?: string;
   dodoPaymentId?: string;
@@ -41,6 +55,7 @@ export type RelayerJobRecord = {
 export interface PaymentStore {
   upsertInvoice(record: InvoicePaymentRecord): Promise<InvoicePaymentRecord>;
   requireInvoice(invoiceId: string): Promise<InvoicePaymentRecord>;
+  listInvoices(filter?: { sellerAccount?: string; investorAccount?: string; statusCasper?: InvoiceStatus }): Promise<InvoicePaymentRecord[]>;
   updateInvoice(invoiceId: string, patch: Partial<InvoicePaymentRecord>): Promise<InvoicePaymentRecord>;
   recordCheckout(record: DodoCheckoutRecord): Promise<DodoCheckoutRecord>;
   requireCheckout(sessionId: string): Promise<DodoCheckoutRecord>;
@@ -74,6 +89,14 @@ export class InMemoryPaymentStore implements PaymentStore {
       throw new Error(`Invoice not found: ${invoiceId}`);
     }
     return { ...record };
+  }
+
+  async listInvoices(filter: { sellerAccount?: string; investorAccount?: string; statusCasper?: InvoiceStatus } = {}): Promise<InvoicePaymentRecord[]> {
+    return Array.from(this.invoices.values())
+      .filter((record) => !filter.sellerAccount || record.sellerAccount === filter.sellerAccount)
+      .filter((record) => !filter.investorAccount || record.investorAccount === filter.investorAccount)
+      .filter((record) => !filter.statusCasper || record.statusCasper === filter.statusCasper)
+      .map((record) => ({ ...record }));
   }
 
   async updateInvoice(invoiceId: string, patch: Partial<InvoicePaymentRecord>): Promise<InvoicePaymentRecord> {
@@ -171,8 +194,22 @@ export class InMemoryPaymentStore implements PaymentStore {
 type InvoiceRow = {
   id: string;
   invoice_hash: `0x${string}`;
+  title: string | null;
+  seller_account: string | null;
+  investor_account: string | null;
+  original_currency: string | null;
+  original_amount_minor: string | null;
+  usd_amount_cents: string | null;
+  advance_amount_usd_cents: string | null;
   repayment_amount_usd_cents: string;
+  investor_yield_usd_cents: string | null;
+  risk_tier: string | null;
+  risk_score: number | null;
+  discount_bps: number | null;
+  due_date: string | null;
   status_casper: InvoiceStatus;
+  attestation_hash: `0x${string}` | null;
+  agent_confidence: number | null;
   dodo_checkout_session_id: string | null;
   dodo_checkout_url: string | null;
   dodo_payment_id: string | null;
@@ -231,14 +268,32 @@ export class PostgresPaymentStore implements PaymentStore {
     await this.ensureSchema();
     await this.pool.query(
       `insert into invoice_records (
-        id, invoice_hash, repayment_amount_usd_cents, status_casper,
+        id, invoice_hash, title, seller_account, investor_account,
+        original_currency, original_amount_minor, usd_amount_cents,
+        advance_amount_usd_cents, repayment_amount_usd_cents, investor_yield_usd_cents,
+        risk_tier, risk_score, discount_bps, due_date, status_casper,
+        attestation_hash, agent_confidence,
         dodo_checkout_session_id, dodo_checkout_url, dodo_payment_id, dodo_nonce,
         last_repayment_deploy_hash, updated_at
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9, now())
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23, now())
       on conflict (id) do update set
         invoice_hash = excluded.invoice_hash,
+        title = coalesce(excluded.title, invoice_records.title),
+        seller_account = coalesce(excluded.seller_account, invoice_records.seller_account),
+        investor_account = coalesce(excluded.investor_account, invoice_records.investor_account),
+        original_currency = coalesce(excluded.original_currency, invoice_records.original_currency),
+        original_amount_minor = coalesce(excluded.original_amount_minor, invoice_records.original_amount_minor),
+        usd_amount_cents = coalesce(excluded.usd_amount_cents, invoice_records.usd_amount_cents),
+        advance_amount_usd_cents = coalesce(excluded.advance_amount_usd_cents, invoice_records.advance_amount_usd_cents),
         repayment_amount_usd_cents = excluded.repayment_amount_usd_cents,
+        investor_yield_usd_cents = coalesce(excluded.investor_yield_usd_cents, invoice_records.investor_yield_usd_cents),
+        risk_tier = coalesce(excluded.risk_tier, invoice_records.risk_tier),
+        risk_score = coalesce(excluded.risk_score, invoice_records.risk_score),
+        discount_bps = coalesce(excluded.discount_bps, invoice_records.discount_bps),
+        due_date = coalesce(excluded.due_date, invoice_records.due_date),
         status_casper = excluded.status_casper,
+        attestation_hash = coalesce(excluded.attestation_hash, invoice_records.attestation_hash),
+        agent_confidence = coalesce(excluded.agent_confidence, invoice_records.agent_confidence),
         dodo_checkout_session_id = coalesce(excluded.dodo_checkout_session_id, invoice_records.dodo_checkout_session_id),
         dodo_checkout_url = coalesce(excluded.dodo_checkout_url, invoice_records.dodo_checkout_url),
         dodo_payment_id = coalesce(excluded.dodo_payment_id, invoice_records.dodo_payment_id),
@@ -248,8 +303,22 @@ export class PostgresPaymentStore implements PaymentStore {
       [
         record.id,
         record.invoiceHash,
+        record.title ?? null,
+        record.sellerAccount ?? null,
+        record.investorAccount ?? null,
+        record.originalCurrency ?? null,
+        record.originalAmountMinor ?? null,
+        record.usdAmountCents ?? null,
+        record.advanceAmountUsdCents ?? null,
         record.repaymentAmountUsdCents,
+        record.investorYieldUsdCents ?? null,
+        record.riskTier ?? null,
+        record.riskScore ?? null,
+        record.discountBps ?? null,
+        record.dueDate ?? null,
         record.statusCasper,
+        record.attestationHash ?? null,
+        record.agentConfidence ?? null,
         record.dodoCheckoutSessionId ?? null,
         record.dodoCheckoutUrl ?? null,
         record.dodoPaymentId ?? null,
@@ -268,6 +337,30 @@ export class PostgresPaymentStore implements PaymentStore {
       throw new Error(`Invoice not found: ${invoiceId}`);
     }
     return invoiceFromRow(row);
+  }
+
+  async listInvoices(filter: { sellerAccount?: string; investorAccount?: string; statusCasper?: InvoiceStatus } = {}): Promise<InvoicePaymentRecord[]> {
+    await this.ensureSchema();
+    const clauses: string[] = [];
+    const values: string[] = [];
+    if (filter.sellerAccount) {
+      values.push(filter.sellerAccount);
+      clauses.push(`seller_account = $${values.length}`);
+    }
+    if (filter.investorAccount) {
+      values.push(filter.investorAccount);
+      clauses.push(`investor_account = $${values.length}`);
+    }
+    if (filter.statusCasper) {
+      values.push(filter.statusCasper);
+      clauses.push(`status_casper = $${values.length}`);
+    }
+    const where = clauses.length > 0 ? `where ${clauses.join(" and ")}` : "";
+    const result = await this.pool.query<InvoiceRow>(
+      `select * from invoice_records ${where} order by created_at desc`,
+      values
+    );
+    return result.rows.map(invoiceFromRow);
   }
 
   async updateInvoice(invoiceId: string, patch: Partial<InvoicePaymentRecord>): Promise<InvoicePaymentRecord> {
@@ -464,8 +557,22 @@ export class PostgresPaymentStore implements PaymentStore {
       create table if not exists invoice_records (
         id text primary key,
         invoice_hash text not null,
+        title text,
+        seller_account text,
+        investor_account text,
+        original_currency text,
+        original_amount_minor text,
+        usd_amount_cents text,
+        advance_amount_usd_cents text,
         repayment_amount_usd_cents text not null,
+        investor_yield_usd_cents text,
+        risk_tier text,
+        risk_score integer,
+        discount_bps integer,
+        due_date text,
         status_casper text not null,
+        attestation_hash text,
+        agent_confidence double precision,
         dodo_checkout_session_id text,
         dodo_checkout_url text,
         dodo_payment_id text,
@@ -514,6 +621,22 @@ export class PostgresPaymentStore implements PaymentStore {
         updated_at timestamptz not null default now()
       );
     `);
+    await this.pool.query(`
+      alter table invoice_records add column if not exists title text;
+      alter table invoice_records add column if not exists seller_account text;
+      alter table invoice_records add column if not exists investor_account text;
+      alter table invoice_records add column if not exists original_currency text;
+      alter table invoice_records add column if not exists original_amount_minor text;
+      alter table invoice_records add column if not exists usd_amount_cents text;
+      alter table invoice_records add column if not exists advance_amount_usd_cents text;
+      alter table invoice_records add column if not exists investor_yield_usd_cents text;
+      alter table invoice_records add column if not exists risk_tier text;
+      alter table invoice_records add column if not exists risk_score integer;
+      alter table invoice_records add column if not exists discount_bps integer;
+      alter table invoice_records add column if not exists due_date text;
+      alter table invoice_records add column if not exists attestation_hash text;
+      alter table invoice_records add column if not exists agent_confidence double precision;
+    `);
   }
 }
 
@@ -524,6 +647,20 @@ function invoiceFromRow(row: InvoiceRow): InvoicePaymentRecord {
     repaymentAmountUsdCents: row.repayment_amount_usd_cents,
     statusCasper: row.status_casper
   };
+  if (row.title) record.title = row.title;
+  if (row.seller_account) record.sellerAccount = row.seller_account;
+  if (row.investor_account) record.investorAccount = row.investor_account;
+  if (row.original_currency) record.originalCurrency = row.original_currency;
+  if (row.original_amount_minor) record.originalAmountMinor = row.original_amount_minor;
+  if (row.usd_amount_cents) record.usdAmountCents = row.usd_amount_cents;
+  if (row.advance_amount_usd_cents) record.advanceAmountUsdCents = row.advance_amount_usd_cents;
+  if (row.investor_yield_usd_cents) record.investorYieldUsdCents = row.investor_yield_usd_cents;
+  if (row.risk_tier) record.riskTier = row.risk_tier;
+  if (row.risk_score !== null) record.riskScore = row.risk_score;
+  if (row.discount_bps !== null) record.discountBps = row.discount_bps;
+  if (row.due_date) record.dueDate = row.due_date;
+  if (row.attestation_hash) record.attestationHash = row.attestation_hash;
+  if (row.agent_confidence !== null) record.agentConfidence = row.agent_confidence;
   if (row.dodo_checkout_session_id) record.dodoCheckoutSessionId = row.dodo_checkout_session_id;
   if (row.dodo_checkout_url) record.dodoCheckoutUrl = row.dodo_checkout_url;
   if (row.dodo_payment_id) record.dodoPaymentId = row.dodo_payment_id;

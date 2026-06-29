@@ -6,7 +6,6 @@ import {
   MemoryCasperSettlementClient
 } from "./integrations/settlement-relayer";
 import { CasperLifecycleClient } from "./integrations/casper-sdk";
-import { demoInvoices } from "../lib/demo-data";
 
 loadServerEnv();
 
@@ -37,53 +36,51 @@ export function getCasperLifecycleClient(): CasperLifecycleClient {
 }
 
 async function createRuntime(): Promise<PaymentRuntime> {
-  const paymentStore = process.env.DATABASE_URL?.startsWith("postgres")
-    ? new PostgresPaymentStore(process.env.DATABASE_URL)
-    : new InMemoryPaymentStore();
+  const paymentStore = createPaymentStore();
+  return {
+    paymentStore,
+    casperSettlement: createSettlementClient(paymentStore)
+  };
+}
 
-  for (const invoice of demoInvoices) {
-    await paymentStore.upsertInvoice({
-      id: invoice.id,
-      invoiceHash: invoice.invoiceHash,
-      repaymentAmountUsdCents: invoice.repaymentAmountUsdCents,
-      statusCasper: invoice.statusCasper as
-        | "Created"
-        | "Scored"
-        | "Listed"
-        | "Funded"
-        | "RepaymentPending"
-        | "Repaid"
-        | "Settled"
-        | "Defaulted"
-        | "Cancelled"
-        | "Rejected"
-        | "Disputed"
-    });
+function createPaymentStore(): PaymentStore {
+  if (process.env.DATABASE_URL?.startsWith("postgres")) {
+    return new PostgresPaymentStore(process.env.DATABASE_URL);
   }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("DATABASE_URL must be a Postgres connection string in production");
+  }
+  return new InMemoryPaymentStore();
+}
 
+function createSettlementClient(paymentStore: PaymentStore): CasperSettlementClient {
   const canUseCasperSdk =
     Boolean(process.env.CASPER_NODE_RPC_URL) &&
     Boolean(process.env.INVOICE_REGISTRY_PACKAGE_HASH) &&
     Boolean(process.env.SETTLEMENT_RELAYER_PRIVATE_KEY_PATH);
 
-  const casperSettlement = canUseCasperSdk
-    ? new CasperSdkSettlementClient(paymentStore, {
-        rpcUrl: process.env.CASPER_NODE_RPC_URL ?? "",
-        chainName: process.env.CASPER_CHAIN_NAME ?? "casper-test",
-        packageHash: process.env.INVOICE_REGISTRY_PACKAGE_HASH ?? "",
-        relayerPrivateKeyPath: process.env.SETTLEMENT_RELAYER_PRIVATE_KEY_PATH ?? "",
-        paymentMotes: parsePaymentMotes(process.env.CASPER_RELAYER_PAYMENT_MOTES)
-      })
-    : new MemoryCasperSettlementClient(paymentStore);
+  if (canUseCasperSdk) {
+    return new CasperSdkSettlementClient(paymentStore, {
+      rpcUrl: process.env.CASPER_NODE_RPC_URL ?? "",
+      chainName: process.env.CASPER_CHAIN_NAME ?? "casper-test",
+      packageHash: process.env.INVOICE_REGISTRY_PACKAGE_HASH ?? "",
+      relayerPrivateKeyPath: process.env.SETTLEMENT_RELAYER_PRIVATE_KEY_PATH ?? "",
+      paymentMotes: parsePaymentMotes(process.env.CASPER_RELAYER_PAYMENT_MOTES)
+    });
+  }
 
-  return { paymentStore, casperSettlement };
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Casper settlement relayer environment is not fully configured");
+  }
+
+  return new MemoryCasperSettlementClient(paymentStore);
 }
 
 function parsePaymentMotes(value: string | undefined): number | undefined {
   if (!value) return undefined;
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    throw new Error("CASPER_RELAYER_PAYMENT_MOTES must be a positive safe integer");
+    throw new Error("Casper payment motes must be a positive safe integer");
   }
   return parsed;
 }

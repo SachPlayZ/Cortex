@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import type { DemoInvoice } from "../../lib/demo-data";
+import type { ReceivableView } from "../../lib/finance";
 import { sha256Hex } from "@cortex/shared";
 
 type CasperSdk = typeof import("casper-js-sdk");
@@ -101,7 +101,7 @@ export class CasperLifecycleClient {
     );
   }
 
-  async createInvoice(invoice: DemoInvoice, seller: CasperSigner): Promise<string> {
+  async createInvoice(invoice: ReceivableView, seller: CasperSigner): Promise<string> {
     return this.caller.call(
       seller,
       "create_invoice",
@@ -109,27 +109,27 @@ export class CasperLifecycleClient {
         invoice_id: hashArg(invoice.id),
         invoice_hash: hashArg(invoice.invoiceHash),
         evidence_hash: hashArg(`evidence:${invoice.id}`),
-        buyer_hash: hashArg(invoice.buyerHash),
-        original_currency_hash: hashArg(invoice.originalCurrency),
-        invoice_amount_usd_cents: u256Arg(invoice.usdAmountCents),
-        due_timestamp: u64Arg(dateToUnixSeconds(invoice.dueDate))
+        buyer_hash: hashArg(`buyer:${invoice.id}`),
+        original_currency_hash: hashArg(invoice.originalCurrency ?? "USD"),
+        invoice_amount_usd_cents: u256Arg(invoice.usdAmountCents ?? invoice.repaymentAmountUsdCents),
+        due_timestamp: u64Arg(dateToUnixSeconds(invoice.dueDate ?? new Date().toISOString().slice(0, 10)))
       })
     );
   }
 
-  async postRiskScore(invoice: DemoInvoice, agent: CasperSigner): Promise<string> {
+  async postRiskScore(invoice: ReceivableView, agent: CasperSigner): Promise<string> {
     return this.caller.call(
       agent,
       "post_risk_score",
       casperSdk.Args.fromMap({
         invoice_id: hashArg(invoice.id),
-        risk_score: casperSdk.CLValue.newCLUint8(invoice.riskScore),
+        risk_score: casperSdk.CLValue.newCLUint8(invoice.riskScore ?? 0),
         risk_tier: casperSdk.CLValue.newCLUint8(riskTierToContractValue(invoice.riskTier)),
-        discount_bps: casperSdk.CLValue.newCLUInt32(invoice.discountBps),
-        advance_rate_bps: casperSdk.CLValue.newCLUInt32(10_000 - invoice.discountBps),
-        advance_amount_usd_cents: u256Arg(invoice.advanceAmountUsdCents),
+        discount_bps: casperSdk.CLValue.newCLUInt32(invoice.discountBps ?? 0),
+        advance_rate_bps: casperSdk.CLValue.newCLUInt32(10_000 - (invoice.discountBps ?? 0)),
+        advance_amount_usd_cents: u256Arg(invoice.advanceAmountUsdCents ?? "0"),
         repayment_amount_usd_cents: u256Arg(invoice.repaymentAmountUsdCents),
-        attestation_hash: hashArg(invoice.attestationHash)
+        attestation_hash: hashArg(invoice.attestationHash ?? `attestation:${invoice.id}`)
       })
     );
   }
@@ -138,13 +138,13 @@ export class CasperLifecycleClient {
     return this.caller.call(seller, "list_invoice", casperSdk.Args.fromMap({ invoice_id: hashArg(invoiceId) }));
   }
 
-  async fundInvoice(invoice: DemoInvoice, investor: CasperSigner): Promise<string> {
+  async fundInvoice(invoice: ReceivableView, investor: CasperSigner): Promise<string> {
     return this.caller.call(
       investor,
       "fund_invoice",
       casperSdk.Args.fromMap({
         invoice_id: hashArg(invoice.id),
-        funded_amount_usd_cents: u256Arg(invoice.advanceAmountUsdCents)
+        funded_amount_usd_cents: u256Arg(invoice.advanceAmountUsdCents ?? "0")
       })
     );
   }
@@ -200,7 +200,7 @@ function publicKeyAddressArg(publicKeyHex: string) {
   return casperSdk.CLValue.newCLKey(key);
 }
 
-function riskTierToContractValue(tier: DemoInvoice["riskTier"]): number {
+function riskTierToContractValue(tier: string | undefined): number {
   switch (tier) {
     case "Low":
       return 1;
@@ -209,6 +209,8 @@ function riskTierToContractValue(tier: DemoInvoice["riskTier"]): number {
     case "Medium":
       return 3;
     case "Rejected":
+      return 4;
+    default:
       return 4;
   }
 }

@@ -1,5 +1,5 @@
 import { createDodoCheckout, HttpDodoCheckoutClient } from "../../../../../server/integrations/dodo";
-import { getPaymentRuntime } from "../../../../../server/demo-runtime";
+import { getPaymentRuntime } from "../../../../../server/payment-runtime";
 import { loadServerEnv } from "../../../../../server/env";
 
 export async function POST(request: Request): Promise<Response> {
@@ -27,8 +27,8 @@ export async function POST(request: Request): Promise<Response> {
         apiKey,
         productId,
         "https://test.dodopayments.com",
-        process.env.DODO_RETURN_URL,
-        process.env.DODO_CANCEL_URL
+        withInvoiceId(process.env.DODO_RETURN_URL, body.invoice_id),
+        withInvoiceId(process.env.DODO_CANCEL_URL, body.invoice_id)
       )
     });
     return Response.json({
@@ -39,4 +39,11 @@ export async function POST(request: Request): Promise<Response> {
   } catch (error) {
     return Response.json({ error: error instanceof Error ? error.message : "Checkout failed" }, { status: 400 });
   }
+}
+
+function withInvoiceId(baseUrl: string | undefined, invoiceId: string): string | undefined {
+  if (!baseUrl) return undefined;
+  const url = new URL(baseUrl);
+  url.searchParams.set("invoice_id", invoiceId);
+  return url.toString();
 }

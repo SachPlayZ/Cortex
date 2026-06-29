@@ -1,5 +1,5 @@
 import { handleDodoWebhook } from "../../../../server/integrations/dodo";
-import { getPaymentRuntime } from "../../../../server/demo-runtime";
+import { getPaymentRuntime } from "../../../../server/payment-runtime";
 import { loadServerEnv } from "../../../../server/env";
 
 export async function POST(request: Request): Promise<Response> {

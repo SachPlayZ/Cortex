@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { CasperWalletProvider } from "../components/casper-wallet";
 import { Nav } from "../components/nav";
 import "./globals.css";
 
@@ -19,10 +20,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <div className="shell">
-          <Nav />
-          <main className="main">{children}</main>
-        </div>
+        <CasperWalletProvider>
+          <div className="shell" id="cortex-root">
+            <Nav />
+            <main className="main">{children}</main>
+          </div>
+        </CasperWalletProvider>
       </body>
     </html>
   );

@@ -9,13 +9,12 @@ Cortex is an AI-underwritten invoice financing marketplace on Casper. Sellers up
 3. Backend and agent pipeline.
 4. Dodo repayment integration.
 5. Frontend.
-6. End-to-end demo hardening.
+6. End-to-end production hardening.
 
 ## Setup
 
 ```bash
 pnpm install
-pnpm demo:seed
 pnpm test:shared
 pnpm lint
 pnpm typecheck
@@ -26,13 +25,12 @@ pnpm dev
 
 ## Current Status
 
-Implemented demo spine:
+Implemented production spine:
 
 - `packages/shared`: schemas, integer money helpers, fixed-point FX conversion, deterministic hashing, status enums, tests.
 - `contracts`: Odra/Casper strict contract set: `InvoiceRegistry`, `FundingVault`, `RepaymentEscrow`, and `AgentReputation`, with lifecycle, seller cash-out, vault liquidity, webhook repayment, investor claim, duplicate payment protection, underpayment rejection, and Casper backend wasm tests.
 - `agents`: deterministic parser, FX normalizer, verification, risk pricing, attestation, and orchestration tests.
-- `apps/web`: Next App Router demo routes, Dodo checkout/webhook integration, raw-body Standard Webhooks verification, idempotent relayer job flow, and UI proof points.
-- `samples/invoices`: low-risk INR, medium-risk USD, and fake duplicate invoice fixtures.
+- `apps/web`: Next App Router onboarding, wallet-scoped seller/investor workspaces, Dodo hosted checkout/webhook integration, raw-body Standard Webhooks verification, and idempotent relayer job flow.
 
 Live Dodo checkout needs `DODO_PAYMENTS_API_KEY`, `DODO_PAYMENTS_WEBHOOK_SECRET`, and `DODO_PRODUCT_ID`. Configure `DODO_PRODUCT_ID` as a one-time Pay What You Want product; Cortex passes the invoice repayment amount as `product_cart[].amount` in USD cents. The return URL reports pending only; repayment requires the signed webhook path.
 

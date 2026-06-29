@@ -2,6 +2,7 @@ import { hashJson, sha256Hex } from "@cortex/shared";
 import { buildAttestation } from "../attestation/index.js";
 import { FxNormalizer } from "../fx/index.js";
 import { parseInvoiceText } from "../parser/index.js";
+import { groqParseInvoice } from "../parser/groq-parser.js";
 import { priceRisk } from "../risk/index.js";
 import { verifyInvoice } from "../verification/index.js";
 import type { FxRateProvider } from "../fx/index.js";
@@ -10,12 +11,21 @@ export async function runUnderwriting(input: {
   invoiceText: string;
   sellerWallet: string;
   fxProvider: FxRateProvider;
+  groqApiKey?: string;
+  groqModel?: string;
   existingInvoiceHashes?: ReadonlySet<string>;
   existingSellerInvoiceNumbers?: ReadonlySet<string>;
   now?: Date;
 }) {
   const now = input.now ?? new Date();
-  const parsed = parseInvoiceText({ invoiceText: input.invoiceText, now });
+  const parsed = input.groqApiKey
+    ? await groqParseInvoice({
+        invoiceText: input.invoiceText,
+        apiKey: input.groqApiKey,
+        ...(input.groqModel ? { model: input.groqModel } : {}),
+        now
+      })
+    : parseInvoiceText({ invoiceText: input.invoiceText, now });
   const invoiceHash = sha256Hex(input.invoiceText);
   const evidenceHash = sha256Hex(input.invoiceText.trim());
   const buyerHash = hashJson({ buyer_name: parsed.buyer_name, buyer_domain: parsed.buyer_domain ?? "" });
@@ -56,7 +66,8 @@ export async function runUnderwriting(input: {
     fx,
     verification,
     pricing,
-    createdAt: now.toISOString()
+    createdAt: now.toISOString(),
+    model: input.groqApiKey ? `groq/${input.groqModel ?? "llama-3.3-70b-versatile"}` : "deterministic-v1"
   });
 
   return {
