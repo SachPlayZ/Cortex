@@ -2,6 +2,10 @@ import type { ReactNode } from "react";
 import { CasperWalletProvider } from "../components/casper-wallet";
 import { Nav } from "../components/nav";
 import "./globals.css";
+import { Geist } from "next/font/google";
+import { cn } from "@/lib/utils";
+
+const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata = {
   title: "Cortex",
@@ -18,12 +22,12 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={cn("font-sans", geist.variable)}>
       <body>
         <CasperWalletProvider>
-          <div className="shell" id="cortex-root">
+          <div className="min-h-dvh" id="cortex-root">
             <Nav />
-            <main className="main">{children}</main>
+            <main className="mx-auto max-w-[1160px] px-6 py-12 pb-20">{children}</main>
           </div>
         </CasperWalletProvider>
       </body>

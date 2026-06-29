@@ -1,6 +1,8 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Button, buttonVariants } from "./ui/button";
+import { cn } from "@/lib/utils";
 
 type CsprClickAccount = {
   public_key?: string;
@@ -226,23 +228,29 @@ export function ConnectWalletButton({ role, compact = false }: { role?: WalletRo
 
   if (wallet.isConnected) {
     return (
-      <div className={compact ? "walletCompact" : "walletPanel"}>
-        <span className="walletDot" />
-        <span className="walletAddress">{shortAccount(wallet.accountHash)}</span>
-        {wallet.role ? <span className="walletRole">{wallet.role}</span> : null}
-        <button className="ghostButton" type="button" onClick={wallet.disconnect}>
+      <div className={`flex flex-wrap items-center gap-2 ${compact ? "" : "mt-2"}`}>
+        <span className="size-2 rounded-full bg-good shadow-[0_0_18px_rgba(74,222,128,0.7)]" />
+        <span className="rounded-full border border-line bg-[rgba(24,24,28,0.88)] px-2.5 py-1.5 text-xs font-semibold text-ink">
+          {shortAccount(wallet.accountHash)}
+        </span>
+        {wallet.role ? (
+          <span className="rounded-full border border-[rgba(183,255,90,0.22)] px-2 py-1 text-[11px] uppercase tracking-widest text-accent-2">
+            {wallet.role}
+          </span>
+        ) : null}
+        <Button variant="ghost" size="xs" onClick={wallet.disconnect}>
           Disconnect
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className={compact ? "walletCompact" : "walletPanel"}>
-      <button className="primary" type="button" onClick={connect}>
+    <div className={`flex flex-wrap items-center gap-2 ${compact ? "" : "mt-2"}`}>
+      <Button onClick={connect} size="sm">
         {wallet.isSdkReady ? "Connect with CSPR.click" : "Loading CSPR.click..."}
-      </button>
-      {error ? <span className="walletError">{error}</span> : null}
+      </Button>
+      {error ? <span className="max-w-[280px] text-xs text-bad">{error}</span> : null}
     </div>
   );
 }
@@ -260,10 +268,12 @@ export function WalletGate({
 
   if (!wallet.isConnected || wallet.role !== role) {
     return (
-      <section className="panel walletGate">
-        <span className="label">{role} wallet required</span>
-        <h2>{title}</h2>
-        <p className="fineprint">
+      <section className="mx-auto my-10 grid max-w-[720px] gap-3.5 rounded-[10px] border border-line bg-gradient-to-b from-[rgba(24,24,28,0.96)] to-[rgba(17,17,22,0.96)] p-6">
+        <span className="text-[11px] font-medium uppercase tracking-widest text-ink-muted">
+          {role} wallet required
+        </span>
+        <h2 className="text-3xl font-bold tracking-tight text-ink">{title}</h2>
+        <p className="text-xs leading-relaxed text-ink-muted">
           Cortex ties invoices, funding, and claims to the connected Casper account. Buyer repayment pages stay wallet-free
           because clients pay fiat through Dodo.
         </p>

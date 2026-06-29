@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "./ui/button";
 
 export function CheckoutButton({ invoiceId }: { invoiceId: string }) {
   const [state, setState] = useState<"idle" | "loading" | "error">("idle");
@@ -27,12 +28,12 @@ export function CheckoutButton({ invoiceId }: { invoiceId: string }) {
   }
 
   return (
-    <div className="checkoutBox">
-      <button className="primary" type="button" onClick={createHostedCheckout} disabled={state === "loading"}>
+    <div className="grid gap-3">
+      <Button type="button" onClick={createHostedCheckout} disabled={state === "loading"} className="w-fit">
         {state === "loading" ? "Creating hosted checkout..." : "Continue to hosted Dodo checkout"}
-      </button>
-      {state === "error" ? <p className="error">{error}</p> : null}
-      <p className="fineprint">
+      </Button>
+      {state === "error" ? <p className="m-0 text-xs text-bad">{error}</p> : null}
+      <p className="m-0 text-xs leading-relaxed text-ink-muted">
         You will leave Cortex for the hosted Dodo payment page. Cortex waits for the signed webhook before showing success.
       </p>
     </div>

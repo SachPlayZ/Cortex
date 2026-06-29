@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { sha256Hex } from "@cortex/shared";
 import { FxNormalizer, ManualFxRateProvider, parseInvoiceText, runUnderwriting } from "../src/index.js";
+import { extractJsonObject } from "../src/parser/groq-parser.js";
 
 const now = new Date("2026-06-28T00:00:00.000Z");
 const validInvoice = `
@@ -28,6 +29,11 @@ describe("parser agent", () => {
   it("rejects missing amount and past due dates", () => {
     expect(() => parseInvoiceText({ invoiceText: validInvoice.replace("Amount: INR 83000.00", ""), now })).toThrow("Missing amount");
     expect(() => parseInvoiceText({ invoiceText: validInvoice.replace("Due Date: 2026-07-28", "Due Date: 2026-01-01"), now })).toThrow("past");
+  });
+
+  it("extracts strict JSON from fenced Groq responses", () => {
+    expect(extractJsonObject('```json\n{"invoice_number":"INV-1"}\n```')).toBe('{"invoice_number":"INV-1"}');
+    expect(extractJsonObject('Here is the object:\n{"invoice_number":"INV-2"}')).toBe('{"invoice_number":"INV-2"}');
   });
 });
 

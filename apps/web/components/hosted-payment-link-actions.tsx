@@ -1,6 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { Button, buttonVariants } from "./ui/button";
+import { cn } from "@/lib/utils";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 
 export function HostedPaymentLinkActions({ invoiceId }: { invoiceId: string }) {
   const [checkoutUrl, setCheckoutUrl] = useState("");
@@ -38,30 +42,37 @@ export function HostedPaymentLinkActions({ invoiceId }: { invoiceId: string }) {
     : "";
 
   return (
-    <div className="hostedLinkBox">
-      <label className="field">
-        <span>Optional client email</span>
-        <input
+    <div className="flex flex-wrap items-end gap-2.5">
+      <div className="grid min-w-[min(260px,100%)] gap-1.5">
+        <Label className="text-xs font-semibold text-ink-muted">Optional client email</Label>
+        <Input
           placeholder="client@company.com"
           type="email"
           value={clientEmail}
           onChange={(event) => setClientEmail(event.target.value)}
+          className="border-line bg-[#0b0d10] text-ink focus-visible:border-accent-2/50"
         />
-      </label>
-      <button className="secondary" type="button" onClick={generateLink} disabled={state === "loading"}>
+      </div>
+      <Button variant="outline" size="sm" type="button" onClick={generateLink} disabled={state === "loading"}>
         {state === "loading" ? "Generating..." : "Generate hosted Dodo link"}
-      </button>
+      </Button>
       {checkoutUrl ? (
         <>
-          <p className="mono">{checkoutUrl}</p>
-          <button className="secondary" type="button" onClick={() => void navigator.clipboard.writeText(checkoutUrl)}>
+          <p className="w-full break-all font-mono text-[11.5px] text-ink-muted">{checkoutUrl}</p>
+          <Button variant="outline" size="sm" type="button" onClick={() => void navigator.clipboard.writeText(checkoutUrl)}>
             Copy hosted link
-          </button>
-          {clientEmail ? <a className="primary" href={reminderHref}>Email hosted link</a> : null}
+          </Button>
+          {clientEmail ? (
+            <a href={reminderHref} className={cn(buttonVariants({ size: "sm" }))}>Email hosted link</a>
+          ) : null}
         </>
       ) : null}
-      {state === "ready" ? <p className="fineprint">Hosted checkout link copied. Send only this link to the client.</p> : null}
-      {state === "error" ? <p className="error">{error}</p> : null}
+      {state === "ready" ? (
+        <p className="m-0 w-full text-xs leading-relaxed text-ink-muted">
+          Hosted checkout link copied. Send only this link to the client.
+        </p>
+      ) : null}
+      {state === "error" ? <p className="m-0 text-xs text-bad">{error}</p> : null}
     </div>
   );
 }
