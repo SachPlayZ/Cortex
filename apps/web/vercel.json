@@ -1,0 +1,6 @@
+{
+  "buildCommand": "pnpm --filter @cortex/shared build && pnpm --filter @cortex/agents build && next build",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "framework": "nextjs",
+  "outputDirectory": ".next"
+}
