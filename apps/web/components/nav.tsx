@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRightIcon, LandmarkIcon, ReceiptTextIcon } from "lucide-react";
+import { ArrowUpRightIcon, LandmarkIcon } from "lucide-react";
 import { ConnectWalletButton, useCasperWallet } from "./casper-wallet";
 import { buttonVariants } from "./ui/button";
 import { cn } from "@/lib/utils";
@@ -29,8 +29,8 @@ export function Nav() {
     <header className="pointer-events-none fixed inset-x-0 top-4 z-30 px-4">
       <nav className="pointer-events-auto mx-auto flex min-h-14 w-full max-w-6xl items-center justify-between gap-4 rounded-full border border-white/10 bg-background/72 px-3 py-2 shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-xl max-md:rounded-2xl">
         <a className="inline-flex min-w-fit items-center gap-2 rounded-full px-2 text-sm font-semibold tracking-tight text-foreground" href="/">
-          <span className="grid size-8 place-items-center overflow-hidden rounded-full border border-white/10 bg-primary text-primary-foreground">
-            <ReceiptTextIcon />
+          <span className="grid size-8 place-items-center overflow-hidden rounded-full border border-white/10 bg-white/5">
+            <img src="/android-chrome-512x512.png" alt="Cortex Logo" className="size-full object-cover" />
           </span>
           <span>Cortex</span>
         </a>

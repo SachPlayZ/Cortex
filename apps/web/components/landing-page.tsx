@@ -12,7 +12,6 @@ import {
   CableIcon,
   FileCheck2Icon,
   LockKeyholeIcon,
-  ReceiptTextIcon,
   ShieldCheckIcon,
   WalletCardsIcon
 } from "lucide-react";
@@ -474,8 +473,8 @@ export function LandingPage() {
       <footer className="border-t border-white/10 px-5 py-12 md:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <span className="grid size-9 place-items-center rounded-full bg-primary text-primary-foreground">
-              <ReceiptTextIcon />
+            <span className="grid size-9 place-items-center overflow-hidden rounded-full border border-white/10 bg-white/5">
+              <img src="/android-chrome-512x512.png" alt="Cortex Logo" className="size-full object-cover" />
             </span>
             Cortex, AI-underwritten invoice financing on Casper.
           </div>

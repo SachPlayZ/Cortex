@@ -1,4 +1,4 @@
-import { CreditCardIcon, LockKeyholeIcon, ReceiptTextIcon } from "lucide-react";
+import { CreditCardIcon, LockKeyholeIcon } from "lucide-react";
 import { CheckoutButton } from "../../../../components/checkout-button";
 import { PageShell } from "../../../../components/page-shell";
 import { StatusPill } from "../../../../components/status-pill";
@@ -44,7 +44,9 @@ export default async function BuyerPayPage({ params }: { params: Promise<{ invoi
       <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
         <Card className="rounded-2xl border-white/10 bg-card/72">
           <CardHeader>
-            <ReceiptTextIcon className="text-primary" />
+            <span className="grid size-10 place-items-center overflow-hidden rounded-full border border-white/10 bg-white/5 mb-3">
+              <img src="/android-chrome-512x512.png" alt="Cortex Logo" className="size-full object-cover" />
+            </span>
             <CardTitle className="text-3xl tracking-normal">{formatUsd(invoice.repaymentAmountUsdCents)}</CardTitle>
             <CardDescription>Amount due for this receivable.</CardDescription>
           </CardHeader>
