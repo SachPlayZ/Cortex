@@ -1,4 +1,5 @@
 import { loadServerEnv } from "./env";
+import { ensureBackgroundJobs } from "./background-jobs";
 import { InMemoryPaymentStore, PostgresPaymentStore, type PaymentStore } from "./integrations/payment-store";
 import {
   CasperSdkSettlementClient,
@@ -22,24 +23,48 @@ export function getPaymentRuntime(): Promise<PaymentRuntime> {
 }
 
 export function getCasperLifecycleClient(): CasperLifecycleClient {
-  const rpcUrl = process.env.CASPER_NODE_RPC_URL;
-  const packageHash = process.env.INVOICE_REGISTRY_PACKAGE_HASH;
-  if (!rpcUrl || !packageHash) {
+  if (!hasCasperLifecycleConfig()) {
     throw new Error("Casper lifecycle environment not configured");
   }
   return new CasperLifecycleClient({
-    rpcUrl,
+    rpcUrl: process.env.CASPER_NODE_RPC_URL ?? "",
     chainName: process.env.CASPER_CHAIN_NAME ?? "casper-test",
-    packageHash,
+    registryPackageHash: process.env.INVOICE_REGISTRY_PACKAGE_HASH ?? "",
+    fundingVaultPackageHash: process.env.FUNDING_VAULT_PACKAGE_HASH ?? "",
+    repaymentEscrowPackageHash: process.env.REPAYMENT_ESCROW_PACKAGE_HASH ?? "",
+    agentReputationPackageHash: process.env.AGENT_REPUTATION_PACKAGE_HASH ?? "",
     paymentMotes: parsePaymentMotes(process.env.CASPER_LIFECYCLE_PAYMENT_MOTES) ?? 2_500_000_000
   });
 }
 
+export function hasCasperLifecycleConfig(): boolean {
+  return (
+    Boolean(process.env.CASPER_NODE_RPC_URL) &&
+    Boolean(process.env.INVOICE_REGISTRY_PACKAGE_HASH) &&
+    Boolean(process.env.FUNDING_VAULT_PACKAGE_HASH) &&
+    Boolean(process.env.REPAYMENT_ESCROW_PACKAGE_HASH) &&
+    Boolean(process.env.AGENT_REPUTATION_PACKAGE_HASH)
+  );
+}
+
+export function hasAgentSignerConfig(): boolean {
+  return hasCasperLifecycleConfig() && Boolean(process.env.AGENT_PRIVATE_KEY_PATH);
+}
+
+export function hasRealCasperSettlementConfig(): boolean {
+  return hasCasperLifecycleConfig() && Boolean(process.env.SETTLEMENT_RELAYER_PRIVATE_KEY_PATH);
+}
+
 async function createRuntime(): Promise<PaymentRuntime> {
-  const paymentStore = createPaymentStore();
+  const runtime = {
+    paymentStore: createPaymentStore(),
+    casperSettlement: undefined as unknown as CasperSettlementClient
+  };
+  runtime.casperSettlement = createSettlementClient(runtime.paymentStore);
+  ensureBackgroundJobs(runtime);
   return {
-    paymentStore,
-    casperSettlement: createSettlementClient(paymentStore)
+    paymentStore: runtime.paymentStore,
+    casperSettlement: runtime.casperSettlement
   };
 }
 
@@ -54,16 +79,13 @@ function createPaymentStore(): PaymentStore {
 }
 
 function createSettlementClient(paymentStore: PaymentStore): CasperSettlementClient {
-  const canUseCasperSdk =
-    Boolean(process.env.CASPER_NODE_RPC_URL) &&
-    Boolean(process.env.INVOICE_REGISTRY_PACKAGE_HASH) &&
-    Boolean(process.env.SETTLEMENT_RELAYER_PRIVATE_KEY_PATH);
-
-  if (canUseCasperSdk) {
+  if (hasRealCasperSettlementConfig()) {
     return new CasperSdkSettlementClient(paymentStore, {
       rpcUrl: process.env.CASPER_NODE_RPC_URL ?? "",
       chainName: process.env.CASPER_CHAIN_NAME ?? "casper-test",
-      packageHash: process.env.INVOICE_REGISTRY_PACKAGE_HASH ?? "",
+      registryPackageHash: process.env.INVOICE_REGISTRY_PACKAGE_HASH ?? "",
+      repaymentEscrowPackageHash: process.env.REPAYMENT_ESCROW_PACKAGE_HASH ?? "",
+      agentReputationPackageHash: process.env.AGENT_REPUTATION_PACKAGE_HASH ?? "",
       relayerPrivateKeyPath: process.env.SETTLEMENT_RELAYER_PRIVATE_KEY_PATH ?? "",
       paymentMotes: parsePaymentMotes(process.env.CASPER_RELAYER_PAYMENT_MOTES)
     });

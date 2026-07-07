@@ -1,12 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { ArrowRightIcon, FileTextIcon, FingerprintIcon, ShieldCheckIcon, SparklesIcon, WalletIcon } from "lucide-react";
 import { WalletGate, shortAccount, useCasperWallet } from "./casper-wallet";
+import { InvoiceLifecyclePanel } from "./invoice-lifecycle-panel";
+import { PageShell } from "./page-shell";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { Badge } from "./ui/badge";
 import { Button, buttonVariants } from "./ui/button";
-import { cn } from "@/lib/utils";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./ui/card";
+import { Field, FieldDescription, FieldGroup, FieldLabel, FieldSet, FieldLegend } from "./ui/field";
 import { Input } from "./ui/input";
-import { Label } from "./ui/label";
+import { Progress, ProgressLabel } from "./ui/progress";
+import { Spinner } from "./ui/spinner";
 import { Textarea } from "./ui/textarea";
+import { cn } from "@/lib/utils";
 
 type UnderwriteResponse = {
   invoiceId: string;
@@ -39,6 +47,15 @@ type UnderwriteResponse = {
   error?: string;
 };
 
+const stages = [
+  "Evidence hash",
+  "Parser schema",
+  "FX cents",
+  "Verification",
+  "Risk terms",
+  "Casper ready"
+];
+
 export function SellerUploadFlow() {
   return (
     <WalletGate role="seller" title="Connect the freelancer wallet before uploading invoices.">
@@ -57,20 +74,21 @@ function ConnectedSellerUploadFlow() {
   const [error, setError] = useState("");
 
   async function submitInvoice() {
-    setState("underwriting");
-    setError("");
-    setResult(null);
-
     if (!file && !invoiceText.trim()) {
+      setResult(null);
       setError("Upload an invoice file or paste invoice text before underwriting.");
       setState("error");
       return;
     }
+    setState("underwriting");
+    setError("");
+    setResult(null);
 
     const form = new FormData();
     const uploadFile = file ?? new File([invoiceText], "invoice.txt", { type: "text/plain" });
     form.set("file", uploadFile);
     form.set("sellerWallet", wallet.accountHash);
+    form.set("sellerPublicKey", wallet.publicKeyHex);
     if (clientEmail) form.set("buyerEmail", clientEmail);
 
     try {
@@ -85,124 +103,187 @@ function ConnectedSellerUploadFlow() {
     }
   }
 
+  const progress = state === "ready" ? 100 : state === "underwriting" ? 64 : state === "error" ? 18 : 8;
+
   return (
-    <>
-      <div className="mb-3.5 flex items-center justify-between gap-3">
-        <h2 className="m-0 text-lg font-bold tracking-tight text-ink">Upload invoice</h2>
-        <span className="rounded-full border border-line bg-[rgba(24,24,28,0.88)] px-2.5 py-1.5 text-xs font-semibold text-ink">
-          Seller wallet {shortAccount(wallet.accountHash)}
-        </span>
-      </div>
-
-      <section className="grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-[18px] max-sm:grid-cols-1">
-        <div className="grid gap-4 rounded-[10px] border border-line bg-gradient-to-b from-[rgba(24,24,28,0.96)] to-[rgba(17,17,22,0.96)] p-[22px]">
-          <span className="text-[11px] font-medium uppercase tracking-widest text-ink-muted">Invoice evidence</span>
-          <h3 className="m-0 text-lg font-bold tracking-[-0.02em] text-ink">Only this connected wallet can own the receivable.</h3>
-
-          <div className="grid gap-1.5">
-            <Label className="text-xs font-semibold text-ink-muted">Invoice PDF, PNG, JPG, or text fixture</Label>
-            <Input
-              accept=".pdf,.png,.jpg,.jpeg,.txt,text/plain,application/pdf,image/png,image/jpeg"
-              type="file"
-              className="cursor-pointer border-line bg-[#0b0d10] text-ink file:text-ink-muted focus-visible:border-accent-2/50"
-              onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-            />
-          </div>
-
-          <div className="grid gap-1.5">
-            <Label className="text-xs font-semibold text-ink-muted">Paste invoice text if you do not have a file</Label>
-            <Textarea
-              placeholder="Paste the real invoice text here..."
-              value={invoiceText}
-              onChange={(event) => setInvoiceText(event.target.value)}
-              rows={9}
-              className="resize-y border-line bg-[#0b0d10] text-ink leading-[1.55] focus-visible:border-accent-2/50"
-            />
-          </div>
-
-          <div className="grid gap-2.5 rounded-[10px] border border-dashed border-line p-3.5">
-            <span className="text-[11px] font-medium uppercase tracking-widest text-ink-muted">Optional client contact</span>
-            <div className="grid gap-1.5">
-              <Label className="text-xs font-semibold text-ink-muted">Client email for reminder only</Label>
-              <Input
-                placeholder="ap@client.com"
-                type="email"
-                value={clientEmail}
-                onChange={(event) => setClientEmail(event.target.value)}
-                className="border-line bg-[#0b0d10] text-ink focus-visible:border-accent-2/50"
-              />
+    <PageShell
+      eyebrow={`Seller wallet ${shortAccount(wallet.accountHash)}`}
+      title="Upload evidence, then let agents price it."
+      description="The upload flow shows every proof point: invoice hash, parser output, FX normalization, verification checks, risk terms, and the Casper mint/list handoff."
+    >
+      <section className="grid gap-6 lg:grid-cols-[0.92fr_1.08fr]">
+        <Card className="rounded-2xl border-white/10 bg-card/72">
+          <CardHeader>
+            <div className="mb-3 grid size-11 place-items-center rounded-full border border-white/10 bg-primary/10 text-primary">
+              <FileTextIcon />
             </div>
-            <p className="m-0 text-xs leading-relaxed text-ink-muted">
-              This email is off-chain reminder metadata. Cortex stores only hashes on Casper.
-            </p>
-          </div>
+            <CardTitle className="text-3xl tracking-normal">Invoice evidence</CardTitle>
+            <CardDescription>PDF, image, or text fixture. Private invoice data stays off-chain.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FieldSet>
+              <FieldLegend>Upload package</FieldLegend>
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="invoice-file">Invoice PDF, PNG, JPG, WEBP, or text fixture</FieldLabel>
+                  <Input
+                    id="invoice-file"
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,text/plain,application/pdf,image/png,image/jpeg,image/webp"
+                    type="file"
+                    className="cursor-pointer"
+                    onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                  />
+                  <FieldDescription>Maximum demo upload is handled server-side. Hashes are generated before Casper calls.</FieldDescription>
+                </Field>
 
-          <Button type="button" onClick={submitInvoice} disabled={state === "underwriting"} className="w-fit">
-            {state === "underwriting" ? "Running agents..." : "Run underwriting"}
-          </Button>
-          {error ? <p className="m-0 text-xs text-bad">{error}</p> : null}
-        </div>
+                <Field>
+                  <FieldLabel htmlFor="invoice-text">Paste invoice text if OCR misses</FieldLabel>
+                  <Textarea
+                    id="invoice-text"
+                    placeholder="Paste invoice text here"
+                    value={invoiceText}
+                    onChange={(event) => setInvoiceText(event.target.value)}
+                    rows={9}
+                    className="resize-y leading-6"
+                  />
+                </Field>
 
-        <div className="grid gap-1.5 rounded-[10px] border border-line bg-gradient-to-b from-[rgba(24,24,28,0.96)] to-[rgba(17,17,22,0.96)] p-[22px]">
-          {[
-            "Wallet account bound as seller",
-            "File uploaded and evidence hash generated",
-            "Parser output schema validated",
-            "FX conversion normalized to USD cents",
-            "Duplicate and due-date checks complete",
-            "Risk terms priced in basis points",
-            "Seller can mint/list on Casper"
-          ].map((step) => (
-            <div
-              key={step}
-              className="grid gap-1 rounded-[10px] border border-line bg-panel px-4 py-3.5"
-            >
-              {step}
+                <Field>
+                  <FieldLabel htmlFor="client-email">Client email for reminder only</FieldLabel>
+                  <Input
+                    id="client-email"
+                    placeholder="ap@client.com"
+                    type="email"
+                    value={clientEmail}
+                    onChange={(event) => setClientEmail(event.target.value)}
+                  />
+                  <FieldDescription>This remains off-chain reminder metadata.</FieldDescription>
+                </Field>
+              </FieldGroup>
+            </FieldSet>
+          </CardContent>
+          <CardFooter className="flex-col items-start gap-4 md:flex-row md:items-center md:justify-between">
+            <Button type="button" onClick={submitInvoice} disabled={state === "underwriting"}>
+              {state === "underwriting" ? <Spinner data-icon="inline-start" /> : <SparklesIcon data-icon="inline-start" />}
+              {state === "underwriting" ? "Running agents" : "Run underwriting"}
+            </Button>
+            <Badge variant="secondary">{file ? file.name : "No file selected"}</Badge>
+          </CardFooter>
+        </Card>
+
+        <Card className="rounded-2xl border-white/10 bg-background/54">
+          <CardHeader>
+            <div className="mb-3 grid size-11 place-items-center rounded-full border border-white/10 bg-primary/10 text-primary">
+              <ShieldCheckIcon />
             </div>
-          ))}
-        </div>
+            <CardTitle className="text-3xl tracking-normal">Agent pipeline</CardTitle>
+            <CardDescription>Concrete checks, not decorative AI copy.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-5">
+            <Progress value={progress}>
+              <ProgressLabel>Underwriting progress</ProgressLabel>
+              <span className="ml-auto text-sm text-muted-foreground tabular-nums">{progress}%</span>
+            </Progress>
+            <div className="grid gap-3">
+              {stages.map((stage, index) => {
+                const complete = state === "ready" || (state === "underwriting" && index < 4);
+                return (
+                  <div key={stage} className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className={cn("grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold", complete ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
+                        {index + 1}
+                      </span>
+                      <span className="truncate text-sm text-foreground">{stage}</span>
+                    </div>
+                    <Badge variant={complete ? "default" : "outline"}>{complete ? "done" : "pending"}</Badge>
+                  </div>
+                );
+              })}
+            </div>
+            <Alert>
+              <FingerprintIcon />
+              <AlertTitle>On-chain privacy boundary</AlertTitle>
+              <AlertDescription>
+                Buyer names, emails, raw OCR, invoice PDFs, and model reasoning are not written to Casper.
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
       </section>
 
+      {state === "error" && error ? (
+        <Alert variant="destructive">
+          <AlertTitle>Underwriting failed</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
+
       {result ? (
-        <section className="mt-4 grid gap-4 rounded-[10px] border border-line bg-gradient-to-b from-[rgba(24,24,28,0.96)] to-[rgba(17,17,22,0.96)] p-[22px]">
-          <div>
-            <span className="text-[11px] font-medium uppercase tracking-widest text-ink-muted">Agent result</span>
-            <h3 className="m-0 text-lg font-bold tracking-[-0.02em] text-ink">
-              {result.status === "ready_to_mint" ? "Ready to mint/list" : result.status}
-            </h3>
-          </div>
-          <div className="grid grid-cols-4 gap-2.5 max-sm:grid-cols-1">
-            <ResultItem label="Invoice" value={result.parsed.invoice_number ?? result.invoiceId} />
-            <ResultItem label="Buyer" value={result.parsed.buyer_name ?? "validated buyer"} />
-            <ResultItem
-              label="Original"
-              value={`${result.parsed.original_currency ?? ""} ${result.parsed.original_amount_decimal ?? ""}`.trim()}
-            />
-            <ResultItem label="Due date" value={result.parsed.due_date ?? "parsed"} />
-            <ResultItem label="USD cents" value={result.fx.usd_amount_cents ?? "normalized"} />
-            <ResultItem label="Risk" value={`${result.pricing.risk_tier ?? "priced"} / ${result.pricing.risk_score ?? "-"}`} />
-            <ResultItem label="Discount" value={`${result.pricing.discount_bps ?? 0} bps`} />
-            <ResultItem label="Attestation" value={result.attestationHash} mono />
-          </div>
-          <div className="flex flex-wrap gap-2.5">
-            <a href={`/invoice/${result.invoiceId}`} className={cn(buttonVariants({ size: "sm" }))}>Review receivable terms</a>
-            <a href="/seller" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>Back to freelancer dashboard</a>
-          </div>
-          <p className="m-0 text-xs leading-relaxed text-ink-muted">
-            {clientEmail ? `Client email saved for reminder flow: ${clientEmail}. ` : ""}
-            Hosted Dodo payment links are generated only after investor funding moves the invoice to RepaymentPending.
-          </p>
+        <section className="grid gap-6">
+          <Card className="rounded-2xl border-white/10 bg-card/72">
+            <CardHeader className="md:grid-cols-[1fr_auto]">
+              <div>
+                <Badge variant={result.status === "ready_to_mint" ? "default" : "secondary"}>{result.status}</Badge>
+                <CardTitle className="mt-4 text-3xl tracking-normal">
+                  {result.status === "ready_to_mint" ? "Ready to mint and list" : result.status}
+                </CardTitle>
+                <CardDescription>
+                  Hosted Dodo payment links unlock only after investor funding moves the invoice to RepaymentPending.
+                </CardDescription>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <a href={`/invoice/${result.invoiceId}`} className={cn(buttonVariants({ size: "sm" }))}>
+                  Review receivable
+                  <ArrowRightIcon data-icon="inline-end" />
+                </a>
+                <a href="/seller" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>Dashboard</a>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-4">
+              <ResultItem label="Invoice" value={result.parsed.invoice_number ?? result.invoiceId} />
+              <ResultItem label="Buyer" value={result.parsed.buyer_name ?? "validated buyer"} />
+              <ResultItem label="Original" value={`${result.parsed.original_currency ?? ""} ${result.parsed.original_amount_decimal ?? ""}`.trim()} />
+              <ResultItem label="Due date" value={result.parsed.due_date ?? "parsed"} />
+              <ResultItem label="USD cents" value={result.fx.usd_amount_cents ?? "normalized"} />
+              <ResultItem label="Risk" value={`${result.pricing.risk_tier ?? "priced"} / ${result.pricing.risk_score ?? "-"}`} />
+              <ResultItem label="Discount" value={`${result.pricing.discount_bps ?? 0} bps`} />
+              <ResultItem label="Attestation" value={result.attestationHash} mono />
+            </CardContent>
+          </Card>
+
+          <InvoiceLifecyclePanel
+            compact
+            invoice={{
+              id: result.invoiceId,
+              title: result.parsed.invoice_number,
+              sellerAccount: wallet.accountHash,
+              sellerPublicKey: wallet.publicKeyHex,
+              invoiceHash: result.invoiceHash as `0x${string}`,
+              originalCurrency: result.parsed.original_currency,
+              usdAmountCents: result.fx.usd_amount_cents,
+              advanceAmountUsdCents: result.pricing.advance_amount_usd_cents,
+              repaymentAmountUsdCents: result.pricing.repayment_amount_usd_cents ?? "0",
+              riskTier: result.pricing.risk_tier,
+              riskScore: result.pricing.risk_score,
+              discountBps: result.pricing.discount_bps,
+              dueDate: result.parsed.due_date,
+              statusCasper: result.status === "rejected" ? "Rejected" : "Scored",
+              attestationHash: result.attestationHash as `0x${string}`,
+              agentConfidence: result.parsed.extraction_confidence,
+              casperInvoiceExists: false
+            }}
+          />
         </section>
       ) : null}
-    </>
+    </PageShell>
   );
 }
 
 function ResultItem({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="grid min-w-0 gap-1 rounded-lg border border-line-subtle bg-[rgba(9,9,11,0.36)] p-3">
-      <span className="text-[11px] font-medium uppercase tracking-widest text-ink-muted">{label}</span>
-      <strong className={mono ? "break-all font-mono text-[11.5px] text-ink-muted" : "overflow-anywhere font-semibold text-ink"}>
+    <div className="grid min-w-0 gap-2 rounded-xl border border-white/10 bg-white/[0.035] p-4">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <strong className={mono ? "break-all font-mono text-xs text-muted-foreground" : "truncate font-semibold text-foreground"}>
         {value}
       </strong>
     </div>

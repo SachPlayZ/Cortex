@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
 import { CasperWalletProvider } from "../components/casper-wallet";
 import { Nav } from "../components/nav";
+import { TooltipProvider } from "../components/ui/tooltip";
 import "./globals.css";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata = {
   title: "Cortex",
@@ -25,10 +26,12 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" className={cn("font-sans", geist.variable)}>
       <body>
         <CasperWalletProvider>
-          <div className="min-h-dvh" id="cortex-root">
-            <Nav />
-            <main className="mx-auto max-w-[1160px] px-6 py-12 pb-20">{children}</main>
-          </div>
+          <TooltipProvider>
+            <div className="min-h-dvh" id="cortex-root">
+              <Nav />
+              <main className="w-full max-w-full overflow-x-hidden">{children}</main>
+            </div>
+          </TooltipProvider>
         </CasperWalletProvider>
       </body>
     </html>

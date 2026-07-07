@@ -1,4 +1,9 @@
+import { Clock3Icon } from "lucide-react";
 import { PaymentReturnStatus } from "../../../components/payment-return-status";
+import { Card, CardDescription, CardHeader, CardTitle } from "../../../components/ui/card";
+import { Spinner } from "../../../components/ui/spinner";
+
+export const metadata = { title: "Payment status | Cortex" };
 
 export default async function CheckoutSuccessPage({
   searchParams
@@ -8,22 +13,20 @@ export default async function CheckoutSuccessPage({
   const { invoice_id: invoiceId } = await searchParams;
   if (!invoiceId) {
     return (
-      <section className="mx-auto grid max-w-[640px] place-items-center content-center gap-4 text-center" style={{ minHeight: "58dvh" }}>
-        <div
-          className="size-[76px] rounded-full"
-          style={{
-            border: "3px solid rgba(255,255,255,0.12)",
-            borderTopColor: "var(--c-accent-2)",
-            animation: "spin 0.8s linear infinite"
-          }}
-        />
-        <h1 className="m-0 text-[clamp(34px,5vw,64px)] font-extrabold leading-[0.98] tracking-[-0.055em] text-ink">
-          Waiting for payment confirmation
-        </h1>
-        <p className="m-0 leading-relaxed text-ink-muted">
-          Dodo returned without an invoice reference. Keep this page open while Cortex waits for the webhook.
-        </p>
-      </section>
+      <div className="min-h-dvh px-5 pb-24 pt-32 md:px-8 md:pt-36">
+        <Card className="mx-auto min-h-[62dvh] max-w-4xl items-center justify-center rounded-2xl border-white/10 bg-card/72 text-center">
+          <CardHeader className="items-center gap-6">
+            <div className="grid size-20 place-items-center rounded-full border border-white/10 bg-primary/10 text-primary">
+              <Spinner />
+            </div>
+            <Clock3Icon className="text-primary" />
+            <CardTitle className="text-4xl tracking-normal md:text-6xl">Waiting for payment confirmation</CardTitle>
+            <CardDescription className="max-w-xl text-base leading-7">
+              Dodo returned without an invoice reference. Keep this page open while Cortex waits for the webhook.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
     );
   }
 

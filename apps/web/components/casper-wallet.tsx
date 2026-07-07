@@ -1,7 +1,10 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { LockKeyholeIcon, WalletIcon } from "lucide-react";
 import { Button, buttonVariants } from "./ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import { Skeleton } from "./ui/skeleton";
 import { cn } from "@/lib/utils";
 
 type CsprClickAccount = {
@@ -33,10 +36,17 @@ type CsprClickSDK = {
 
 type WalletRole = "seller" | "investor";
 
+type StoredWalletIdentity = {
+  publicKeyHex: string;
+  accountHash: string;
+};
+
 type CasperWalletState = {
+  publicKeyHex: string;
   accountHash: string;
   isConnected: boolean;
   isSdkReady: boolean;
+  isInitializing: boolean;
   role: WalletRole | null;
   connect: (role?: WalletRole) => Promise<void>;
   disconnect: () => Promise<void>;
@@ -64,21 +74,27 @@ declare global {
 }
 
 export function CasperWalletProvider({ children }: { children: ReactNode }) {
+  const [publicKeyHex, setPublicKeyHex] = useState("");
   const [accountHash, setAccountHash] = useState("");
   const [isSdkReady, setIsSdkReady] = useState(false);
   const [sdkError, setSdkError] = useState("");
   const [role, setRole] = useState<WalletRole | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   useEffect(() => {
-    setAccountHash(localStorage.getItem(STORAGE_KEY) ?? "");
+    const storedIdentity = readStoredWalletIdentity(localStorage.getItem(STORAGE_KEY));
+    setPublicKeyHex(storedIdentity.publicKeyHex);
+    setAccountHash(storedIdentity.accountHash);
     const storedRole = localStorage.getItem(ROLE_KEY);
     setRole(storedRole === "seller" || storedRole === "investor" ? storedRole : null);
+    setIsInitializing(false);
   }, []);
 
-  const persistAccount = useCallback((account: string, nextRole?: WalletRole | null) => {
-    setAccountHash(account);
-    if (account) {
-      localStorage.setItem(STORAGE_KEY, account);
+  const persistAccount = useCallback((identity: StoredWalletIdentity, nextRole?: WalletRole | null) => {
+    setPublicKeyHex(identity.publicKeyHex);
+    setAccountHash(identity.accountHash);
+    if (identity.publicKeyHex && identity.accountHash) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(identity));
     } else {
       localStorage.removeItem(STORAGE_KEY);
     }
@@ -96,11 +112,11 @@ export function CasperWalletProvider({ children }: { children: ReactNode }) {
 
     async function syncActiveAccount(event?: CsprClickEvent) {
       const account = (await window.csprclick?.getActiveAccount?.()) ?? event?.detail?.account ?? null;
-      persistAccount(readAccountPublicKey(account), undefined);
+      persistAccount(readWalletIdentity(account), undefined);
     }
 
     function clearActiveAccount() {
-      persistAccount("", null);
+      persistAccount({ publicKeyHex: "", accountHash: "" }, null);
     }
 
     function handleLoaded() {
@@ -165,36 +181,38 @@ export function CasperWalletProvider({ children }: { children: ReactNode }) {
 
   const disconnect = useCallback(async () => {
     window.csprclick?.disconnect();
-    persistAccount("", null);
+    persistAccount({ publicKeyHex: "", accountHash: "" }, null);
   }, [persistAccount]);
 
   const sendTransaction = useCallback(
     async (transactionJson: unknown, onStatusUpdate?: (status: unknown) => void) => {
       const sdk = window.csprclick;
-      if (!sdk?.send || !accountHash) {
+      if (!sdk?.send || !publicKeyHex || !accountHash) {
         throw new Error("Connect CSPR.click before signing Casper transactions.");
       }
       const result = await sdk.send(transactionJson, {
-        signingPublicKey: accountHash.toLowerCase(),
+        signingPublicKey: publicKeyHex.toLowerCase(),
         ...(onStatusUpdate ? { onStatusUpdate } : {})
       });
       if (typeof result === "string") return result;
       return result.transactionHash ?? result.hash ?? "";
     },
-    [accountHash]
+    [accountHash, publicKeyHex]
   );
 
   const value = useMemo<CasperWalletState>(
     () => ({
+      publicKeyHex,
       accountHash,
-      isConnected: Boolean(accountHash),
+      isConnected: Boolean(publicKeyHex && accountHash),
       isSdkReady,
+      isInitializing,
       role,
       connect,
       disconnect,
       sendTransaction
     }),
-    [accountHash, connect, disconnect, isSdkReady, role, sendTransaction]
+    [accountHash, connect, disconnect, isInitializing, isSdkReady, publicKeyHex, role, sendTransaction]
   );
 
   return (
@@ -266,19 +284,45 @@ export function WalletGate({
 }) {
   const wallet = useCasperWallet();
 
+  if (wallet.isInitializing) {
+    return (
+      <div className="min-h-dvh px-5 pb-24 pt-32 md:px-8 md:pt-36">
+        <Card className="mx-auto max-w-3xl rounded-2xl border-white/10 bg-card/72">
+          <CardHeader>
+            <div className="mb-3 grid size-11 place-items-center rounded-full border border-white/10 bg-primary/10 text-primary">
+              <WalletIcon />
+            </div>
+            <CardTitle className="text-3xl tracking-normal">Loading wallet session</CardTitle>
+            <CardDescription>Checking the local CSPR.click account state.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            <Skeleton className="h-10" />
+            <Skeleton className="h-10 w-2/3" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!wallet.isConnected || wallet.role !== role) {
     return (
-      <section className="mx-auto my-10 grid max-w-[720px] gap-3.5 rounded-[10px] border border-line bg-gradient-to-b from-[rgba(24,24,28,0.96)] to-[rgba(17,17,22,0.96)] p-6">
-        <span className="text-[11px] font-medium uppercase tracking-widest text-ink-muted">
-          {role} wallet required
-        </span>
-        <h2 className="text-3xl font-bold tracking-tight text-ink">{title}</h2>
-        <p className="text-xs leading-relaxed text-ink-muted">
-          Cortex ties invoices, funding, and claims to the connected Casper account. Buyer repayment pages stay wallet-free
-          because clients pay fiat through Dodo.
-        </p>
-        <ConnectWalletButton role={role} />
-      </section>
+      <div className="min-h-dvh px-5 pb-24 pt-32 md:px-8 md:pt-36">
+        <Card className="mx-auto max-w-3xl rounded-2xl border-white/10 bg-card/72">
+          <CardHeader>
+            <div className="mb-3 grid size-11 place-items-center rounded-full border border-white/10 bg-primary/10 text-primary">
+              <LockKeyholeIcon />
+            </div>
+            <CardTitle className="text-3xl tracking-normal">{title}</CardTitle>
+            <CardDescription className="leading-6">
+              Cortex ties invoices, funding, and claims to the connected Casper account. Buyer repayment pages stay
+              wallet-free because clients pay fiat through Dodo.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ConnectWalletButton role={role} />
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
@@ -290,6 +334,22 @@ export function shortAccount(account: string): string {
   return `${account.slice(0, 10)}...${account.slice(-8)}`;
 }
 
-function readAccountPublicKey(account: CsprClickAccount | null): string {
-  return account?.public_key ?? account?.publicKey ?? account?.account_hash ?? account?.accountHash ?? "";
+function readWalletIdentity(account: CsprClickAccount | null): StoredWalletIdentity {
+  return {
+    publicKeyHex: account?.public_key ?? account?.publicKey ?? "",
+    accountHash: account?.account_hash ?? account?.accountHash ?? ""
+  };
+}
+
+function readStoredWalletIdentity(value: string | null): StoredWalletIdentity {
+  if (!value) return { publicKeyHex: "", accountHash: "" };
+  try {
+    const parsed = JSON.parse(value) as Partial<StoredWalletIdentity>;
+    if (typeof parsed.publicKeyHex === "string" && typeof parsed.accountHash === "string") {
+      return { publicKeyHex: parsed.publicKeyHex, accountHash: parsed.accountHash };
+    }
+  } catch {
+    // Backward compatibility with the old single-string storage shape.
+  }
+  return { publicKeyHex: value, accountHash: "" };
 }

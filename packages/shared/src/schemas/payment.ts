@@ -7,7 +7,7 @@ export const DodoCheckoutMetadataSchema = z.object({
   invoice_hash: Hex32Schema,
   expected_amount_usd_cents: PositiveBigIntStringSchema,
   nonce: z.string().min(16),
-  environment: z.literal("test_mode"),
+  environment: z.enum(["test_mode", "live_mode"]),
   purpose: z.literal("cortex_invoice_repayment")
 });
 

@@ -1,16 +1,30 @@
+import { BrainCircuitIcon, FingerprintIcon, ShieldCheckIcon } from "lucide-react";
+import { InvoiceLifecyclePanel } from "../../../components/invoice-lifecycle-panel";
+import { PageShell } from "../../../components/page-shell";
 import { StatusPill } from "../../../components/status-pill";
+import { Badge } from "../../../components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../../components/ui/card";
+import { Separator } from "../../../components/ui/separator";
 import { expectedReturnPercent, formatUsd, investorYield } from "../../../lib/finance";
+import { CasperLifecycleService } from "../../../server/integrations/casper-lifecycle";
 import { getPaymentRuntime } from "../../../server/payment-runtime";
+
+export const metadata = { title: "Invoice detail | Cortex" };
 
 export default async function InvoicePage({ params }: { params: Promise<{ invoiceId: string }> }) {
   const { invoiceId } = await params;
   const { paymentStore } = await getPaymentRuntime();
-  const invoice = await paymentStore.requireInvoice(invoiceId).catch(() => undefined);
+  const service = new CasperLifecycleService();
+  const invoice =
+    (await service.reconcileInvoice(invoiceId).catch(() => undefined)) ??
+    (await paymentStore.requireInvoice(invoiceId).catch(() => undefined));
   if (!invoice) {
     return (
-      <div className="rounded-[10px] border border-line bg-gradient-to-b from-[rgba(24,24,28,0.96)] to-[rgba(17,17,22,0.96)] p-[22px] text-ink">
-        Invoice not found.
-      </div>
+      <PageShell title="Invoice not found" description="No local or Casper-backed receivable matched this reference.">
+        <Card className="rounded-2xl border-white/10 bg-card/72">
+          <CardContent>Invoice not found.</CardContent>
+        </Card>
+      </PageShell>
     );
   }
 
@@ -22,61 +36,104 @@ export default async function InvoicePage({ params }: { params: Promise<{ invoic
     ["Repayment", formatUsd(invoice.repaymentAmountUsdCents)],
     ["Expected return", expectedReturnPercent(invoice)],
     ["Investor yield", formatUsd(invoice.investorYieldUsdCents ?? investorYield(invoice))],
-    ["Agent confidence", String(invoice.agentConfidence ?? "pending")]
+    ["Agent confidence", invoice.agentConfidence ? `${(invoice.agentConfidence * 100).toFixed(0)}%` : "pending"]
   ];
 
-  const traceSteps = [
-    "Parser output schema-validated",
-    "FX normalized into USD cents",
-    "Verification checks completed",
-    "Risk terms persisted off-chain",
-    "Only hashes are eligible for Casper calls"
+  const rejected = invoice.statusCasper === "Rejected";
+  const traceSteps: Array<[string, string]> = [
+    ["Parser output schema-validated", "done"],
+    ["FX normalized into USD cents", invoice.usdAmountCents ? "done" : "pending"],
+    ["Verification checks completed", rejected ? "Rejected" : "done"],
+    ["Risk priced and attestation hash persisted", rejected ? "skipped" : invoice.attestationHash ? "done" : "pending"],
+    ["Receivable minted on Casper", rejected ? "skipped" : invoice.casperInvoiceExists ? "done" : "pending"],
+    ["Risk score posted on-chain", rejected ? "skipped" : invoice.scoreDeployHash ? "done" : "pending"]
   ];
 
   return (
-    <>
-      <div className="mb-3.5 flex items-center justify-between gap-3">
-        <h2 className="m-0 text-lg font-bold tracking-tight text-ink">{invoice.id}</h2>
-        <StatusPill status={invoice.statusCasper} />
-      </div>
+    <PageShell
+      eyebrow="Receivable detail"
+      title={invoice.title ?? invoice.id}
+      description="Inspect financial terms, private-data boundaries, agent trace, and every Casper transition attached to this invoice."
+      action={<StatusPill status={invoice.statusCasper} />}
+    >
+      <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+        <Card className="rounded-2xl border-white/10 bg-card/72">
+          <CardHeader>
+            <ShieldCheckIcon className="text-primary" />
+            <CardTitle className="text-3xl tracking-normal">Terms</CardTitle>
+            <CardDescription>All monetary values are displayed from integer cents.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {kvRows.map(([label, val]) => (
+              <div key={label} className="flex justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.035] p-3">
+                <span className="text-sm text-muted-foreground">{label}</span>
+                <strong className="min-w-0 break-all text-right text-sm text-foreground">{val}</strong>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
 
-      <section className="mb-6 grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-[18px] max-sm:grid-cols-1">
-        <div className="grid gap-2.5 rounded-[10px] border border-line bg-gradient-to-b from-[rgba(24,24,28,0.96)] to-[rgba(17,17,22,0.96)] p-[22px]">
-          {kvRows.map(([label, val]) => (
-            <div key={label} className="flex justify-between gap-4 border-b border-line-subtle pb-2.5">
-              <span className="text-ink-muted">{label}</span>
-              <strong className="text-ink">{val}</strong>
+        <Card className="rounded-2xl border-white/10 bg-background/54">
+          <CardHeader>
+            <FingerprintIcon className="text-primary" />
+            <CardTitle className="text-3xl tracking-normal">Hashes and deploys</CardTitle>
+            <CardDescription>Private buyer data stays off-chain. Casper receives hashes and financial fields.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <HashLine label="invoice_hash" value={invoice.invoiceHash} />
+            {invoice.attestationHash ? <HashLine label="attestation_hash" value={invoice.attestationHash} /> : null}
+            {invoice.lastRepaymentDeployHash ? <HashLine label="repayment_deploy" value={invoice.lastRepaymentDeployHash} /> : null}
+            <Separator />
+            {(
+              [
+                ["create_deploy", invoice.createDeployHash],
+                ["score_deploy", invoice.scoreDeployHash],
+                ["list_deploy", invoice.listDeployHash],
+                ["fund_deploy", invoice.fundDeployHash],
+                ["cashout_deploy", invoice.cashoutDeployHash],
+                ["claim_deploy", invoice.claimDeployHash]
+              ] as const
+            )
+              .filter(([, hash]) => Boolean(hash))
+              .map(([label, hash]) => (
+                <HashLine key={label} label={label} value={hash ?? ""} />
+              ))}
+            <Badge variant="secondary" className="w-fit">No raw invoice PDF on-chain</Badge>
+          </CardContent>
+        </Card>
+      </section>
+
+      <InvoiceLifecyclePanel invoice={invoice} />
+
+      <Card className="rounded-2xl border-white/10 bg-card/72">
+        <CardHeader>
+          <BrainCircuitIcon className="text-primary" />
+          <CardTitle className="text-3xl tracking-normal">Agent trace</CardTitle>
+          <CardDescription>Concrete outputs, not decorative AI status text.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          {traceSteps.map(([event, stepStatus], index) => (
+            <div key={event} className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.035] p-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+                  {index + 1}
+                </span>
+                <span className="truncate text-sm text-foreground">{event}</span>
+              </div>
+              <StatusPill status={stepStatus} />
             </div>
           ))}
-        </div>
+        </CardContent>
+      </Card>
+    </PageShell>
+  );
+}
 
-        <div className="grid content-start gap-3 rounded-[10px] border border-line bg-gradient-to-b from-[rgba(24,24,28,0.96)] to-[rgba(17,17,22,0.96)] p-[22px]">
-          <h3 className="m-0 text-lg font-bold tracking-[-0.02em] text-ink">Hashes on Casper</h3>
-          <p className="m-0 break-all font-mono text-[11.5px] text-ink-muted">invoice_hash: {invoice.invoiceHash}</p>
-          {invoice.attestationHash ? (
-            <p className="m-0 break-all font-mono text-[11.5px] text-ink-muted">attestation_hash: {invoice.attestationHash}</p>
-          ) : null}
-          {invoice.lastRepaymentDeployHash ? (
-            <p className="m-0 break-all font-mono text-[11.5px] text-ink-muted">repayment_deploy: {invoice.lastRepaymentDeployHash}</p>
-          ) : null}
-          <p className="m-0 text-xs leading-relaxed text-ink-muted">
-            Private buyer details and invoice documents are not shown or written on-chain.
-          </p>
-        </div>
-      </section>
-
-      <div className="mb-3.5 flex items-center gap-3">
-        <h2 className="m-0 text-lg font-bold tracking-tight text-ink">Agent Trace</h2>
-      </div>
-      <section className="grid gap-1.5">
-        {traceSteps.map((event) => (
-          <div key={event} className="grid gap-1 rounded-[10px] border border-line bg-panel px-4 py-3.5">
-            <strong className="text-sm text-ink">Cortex underwriting</strong>
-            <span className="text-sm text-ink-muted">{event}</span>
-            <StatusPill status="done" />
-          </div>
-        ))}
-      </section>
-    </>
+function HashLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1 rounded-xl border border-white/10 bg-white/[0.035] p-3">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="break-all font-mono text-xs leading-5 text-foreground">{value}</span>
+    </div>
   );
 }

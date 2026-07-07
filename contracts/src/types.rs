@@ -134,6 +134,7 @@ pub enum ContractError {
     EscrowInsufficientLiquidity,
     DefaultNotAllowed,
     UnknownInvoice,
+    NotSeller,
 }
 
 impl fmt::Display for ContractError {

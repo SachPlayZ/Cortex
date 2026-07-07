@@ -53,8 +53,8 @@ export class FrankfurterFxRateProvider implements FxRateProvider {
       throw new Error(`Frankfurter FX failed: ${response.status}`);
     }
     const raw = (await response.json()) as unknown;
-    const body = Array.isArray(raw) ? (raw[0] as { rate?: number; quote?: string; date?: string }) : (raw as { rate?: number; quote?: string; date?: string });
-    if (typeof body.rate !== "number" || !Number.isFinite(body.rate) || body.rate <= 0) {
+    const body = Array.isArray(raw) ? (raw[0] as { rate?: number; quote?: string; date?: string } | undefined) : (raw as { rate?: number; quote?: string; date?: string });
+    if (!body || typeof body.rate !== "number" || !Number.isFinite(body.rate) || body.rate <= 0) {
       throw new Error("Frankfurter FX response missing positive rate");
     }
     if (body.quote !== "USD") {

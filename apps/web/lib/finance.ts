@@ -1,23 +1,35 @@
 export type ReceivableView = {
   id: string;
-  title?: string;
-  sellerAccount?: string;
-  investorAccount?: string;
+  title?: string | undefined;
+  sellerAccount?: string | undefined;
+  sellerPublicKey?: string | undefined;
+  investorAccount?: string | undefined;
+  investorPublicKey?: string | undefined;
   invoiceHash: `0x${string}`;
-  originalCurrency?: string;
-  originalAmountMinor?: string;
-  usdAmountCents?: string;
-  advanceAmountUsdCents?: string;
+  casperInvoiceIdHash?: `0x${string}` | undefined;
+  originalCurrency?: string | undefined;
+  originalAmountMinor?: string | undefined;
+  usdAmountCents?: string | undefined;
+  advanceAmountUsdCents?: string | undefined;
   repaymentAmountUsdCents: string;
-  investorYieldUsdCents?: string;
-  riskTier?: string;
-  riskScore?: number;
-  discountBps?: number;
-  dueDate?: string;
+  investorYieldUsdCents?: string | undefined;
+  riskTier?: string | undefined;
+  riskScore?: number | undefined;
+  discountBps?: number | undefined;
+  dueDate?: string | undefined;
   statusCasper: string;
-  attestationHash?: `0x${string}`;
-  agentConfidence?: number;
-  lastRepaymentDeployHash?: string;
+  attestationHash?: `0x${string}` | undefined;
+  agentConfidence?: number | undefined;
+  casperInvoiceExists?: boolean | undefined;
+  createDeployHash?: string | undefined;
+  scoreDeployHash?: string | undefined;
+  listDeployHash?: string | undefined;
+  fundDeployHash?: string | undefined;
+  cashoutDeployHash?: string | undefined;
+  claimDeployHash?: string | undefined;
+  dodoCheckoutUrl?: string | undefined;
+  lastRepaymentDeployHash?: string | undefined;
+  statusLastSyncedAt?: string | undefined;
 };
 
 export function formatUsd(cents: string): string {
@@ -42,7 +54,8 @@ export function aprEquivalent(invoice: {
   const advance = BigInt(invoice.advanceAmountUsdCents ?? "0");
   if (advance === 0n || !invoice.dueDate) return "0.00%";
   const dueTime = new Date(`${invoice.dueDate}T00:00:00.000Z`).getTime();
-  const daysToDue = Math.max(1, Math.ceil((dueTime - Date.now()) / 86_400_000));
+  const daysToDue = Math.ceil((dueTime - Date.now()) / 86_400_000);
+  if (daysToDue < 1) return "Past due";
   const scaledBps = (BigInt(invoice.investorYieldUsdCents ?? "0") * 3_650_000n) / (advance * BigInt(daysToDue));
   return `${(Number(scaledBps) / 100).toFixed(2)}%`;
 }

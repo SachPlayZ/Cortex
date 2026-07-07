@@ -1,4 +1,5 @@
-import { createDodoCheckout, HttpDodoCheckoutClient } from "../../../../../server/integrations/dodo";
+import { createDodoCheckout, dodoBaseUrl, HttpDodoCheckoutClient } from "../../../../../server/integrations/dodo";
+import { CasperChainSyncService } from "../../../../../server/integrations/casper-chain-sync";
 import { getPaymentRuntime } from "../../../../../server/payment-runtime";
 import { loadServerEnv } from "../../../../../server/env";
 
@@ -23,10 +24,11 @@ export async function POST(request: Request): Promise<Response> {
       input,
       store: paymentStore,
       casper: casperSettlement,
+      readVerifiedInvoiceState: async (invoiceId) => new CasperChainSyncService().getInvoiceState(invoiceId),
       dodo: new HttpDodoCheckoutClient(
         apiKey,
         productId,
-        "https://test.dodopayments.com",
+        dodoBaseUrl(),
         withInvoiceId(process.env.DODO_RETURN_URL, body.invoice_id),
         withInvoiceId(process.env.DODO_CANCEL_URL, body.invoice_id)
       )

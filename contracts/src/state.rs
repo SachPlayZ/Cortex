@@ -229,7 +229,7 @@ impl CortexContracts {
         let invoice = self.invoice_mut(invoice_id)?;
 
         if &invoice.seller != caller {
-            return Err(ContractError::InvalidStatus);
+            return Err(ContractError::NotSeller);
         }
 
         if invoice.status != InvoiceStatus::Scored || invoice.risk_tier == RiskTier::Rejected {
@@ -254,16 +254,16 @@ impl CortexContracts {
         let expected_repayment_usd_cents = {
             let invoice = self.invoice_mut(invoice_id)?;
 
+            if invoice.investor.is_some() {
+                return Err(ContractError::InvoiceAlreadyFunded);
+            }
+
             if invoice.status != InvoiceStatus::Listed {
                 return Err(ContractError::InvalidStatus);
             }
 
             if investor == invoice.seller {
                 return Err(ContractError::SellerCannotFundOwnInvoice);
-            }
-
-            if invoice.investor.is_some() {
-                return Err(ContractError::InvoiceAlreadyFunded);
             }
 
             if invoice.due_timestamp <= now {
@@ -275,7 +275,7 @@ impl CortexContracts {
             }
 
             invoice.investor = Some(investor.clone());
-            invoice.status = InvoiceStatus::Funded;
+            invoice.status = InvoiceStatus::RepaymentPending;
             invoice.funded_at = Some(now);
             invoice.repayment_amount_usd_cents
         };
@@ -306,10 +306,10 @@ impl CortexContracts {
             let invoice = self.invoice_mut(invoice_id)?;
 
             if &invoice.seller != seller {
-                return Err(ContractError::InvalidStatus);
+                return Err(ContractError::NotSeller);
             }
 
-            if invoice.status != InvoiceStatus::Funded {
+            if invoice.status != InvoiceStatus::RepaymentPending {
                 return Err(ContractError::AdvanceNotAvailable);
             }
 
@@ -328,7 +328,6 @@ impl CortexContracts {
         let invoice = self.invoice_mut(invoice_id)?;
         invoice.seller_advance_claimed = true;
         invoice.seller_advance_claimed_at = Some(now);
-        invoice.status = InvoiceStatus::RepaymentPending;
 
         Ok(())
     }
@@ -433,7 +432,14 @@ impl CortexContracts {
         Ok(())
     }
 
-    pub fn mark_default_after_due(&mut self, invoice_id: &Hash32) -> Result<(), ContractError> {
+    pub fn mark_default_after_due(
+        &mut self,
+        caller: &Account,
+        invoice_id: &Hash32,
+    ) -> Result<(), ContractError> {
+        if caller != &self.admin && !self.settlement_relayers.contains(caller) {
+            return Err(ContractError::UnauthorizedRelayer);
+        }
         let now = self.now;
         let grace_period = self.grace_period;
         let invoice = self.invoice_mut(invoice_id)?;

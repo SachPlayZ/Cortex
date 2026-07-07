@@ -68,7 +68,7 @@ describe("orchestrator", () => {
   });
 
   it("rejects duplicate invoice hash", async () => {
-    const invoiceHash = sha256Hex(validInvoice);
+    const invoiceHash = sha256Hex(validInvoice.trim());
     const result = await runUnderwriting({
       invoiceText: validInvoice,
       sellerWallet: "account-hash-seller",
@@ -79,6 +79,33 @@ describe("orchestrator", () => {
 
     expect(result.status).toBe("rejected");
     expect(result.verification.reject_reasons).toContain("duplicate_invoice_hash");
+  });
+
+  it("hashes trimmed text so whitespace variants dedupe identically", async () => {
+    const invoiceHash = sha256Hex(validInvoice.trim());
+    const result = await runUnderwriting({
+      invoiceText: `${validInvoice}\n\n`,
+      sellerWallet: "account-hash-seller",
+      fxProvider: new ManualFxRateProvider({ INR: "0.012" }),
+      existingInvoiceHashes: new Set([invoiceHash]),
+      now
+    });
+
+    expect(result.status).toBe("rejected");
+    expect(result.verification.reject_reasons).toContain("duplicate_invoice_hash");
+  });
+
+  it("hard rejects duplicate invoice number for same seller", async () => {
+    const result = await runUnderwriting({
+      invoiceText: validInvoice,
+      sellerWallet: "account-hash-seller",
+      fxProvider: new ManualFxRateProvider({ INR: "0.012" }),
+      existingSellerInvoiceNumbers: new Set(["INV-018"]),
+      now
+    });
+
+    expect(result.status).toBe("rejected");
+    expect(result.verification.reject_reasons).toContain("duplicate_invoice_number_for_seller");
   });
 
   it("attestation hash is stable", async () => {

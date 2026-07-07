@@ -25,6 +25,7 @@ export function verifyInvoice(input: VerificationInput): VerificationReport {
   const rejectReasons: string[] = [];
 
   if (duplicateInvoiceHash) rejectReasons.push("duplicate_invoice_hash");
+  if (duplicateInvoiceNumberForSeller) rejectReasons.push("duplicate_invoice_number_for_seller");
   if (!dueDateValid) rejectReasons.push("due_date_not_future");
   if (!requiredFieldsPresent) rejectReasons.push("required_fields_missing");
   if (!amountWithinBounds) rejectReasons.push("amount_outside_demo_bounds");
@@ -36,7 +37,7 @@ export function verifyInvoice(input: VerificationInput): VerificationReport {
     0,
     100 -
       (duplicateInvoiceHash ? 100 : 0) -
-      (duplicateInvoiceNumberForSeller ? 10 : 0) -
+      (duplicateInvoiceNumberForSeller ? 100 : 0) -
       (!dueDateValid ? 30 : 0) -
       (!buyerDomainValid ? 8 : 0) -
       (!requiredFieldsPresent ? 40 : 0) -

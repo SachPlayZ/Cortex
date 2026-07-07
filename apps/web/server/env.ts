@@ -14,9 +14,17 @@ export function loadServerEnv(): void {
       if (!line || line.startsWith("#")) continue;
       const index = line.indexOf("=");
       if (index === -1) continue;
-      const key = line.slice(0, index);
-      if (process.env[key]) continue;
-      process.env[key] = line.slice(index + 1);
+      const key = line.slice(0, index).trim();
+      if (!key || process.env[key]) continue;
+      let value = line.slice(index + 1).trim();
+      const quoted = /^(['"])(.*)\1$/.exec(value);
+      if (quoted) {
+        value = quoted[2] ?? "";
+      } else {
+        const comment = value.search(/\s#/);
+        if (comment !== -1) value = value.slice(0, comment).trimEnd();
+      }
+      process.env[key] = value;
     }
   }
 }

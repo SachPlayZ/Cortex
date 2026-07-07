@@ -40,6 +40,14 @@ pub struct InvoiceFundingRegistered {
 }
 
 #[odra::event]
+pub struct VaultInvoiceFunded {
+    pub invoice_id: Hash32,
+    pub seller: Address,
+    pub investor: Address,
+    pub advance_amount_usd_cents: U256,
+}
+
+#[odra::event]
 pub struct SellerAdvanceCashedOut {
     pub invoice_id: Hash32,
     pub seller: Address,
@@ -107,6 +115,49 @@ impl FundingVault {
             },
         );
         self.env().emit_event(InvoiceFundingRegistered {
+            invoice_id,
+            seller,
+            investor,
+            advance_amount_usd_cents,
+        });
+    }
+
+    pub fn fund_invoice(
+        &mut self,
+        invoice_id: Hash32,
+        seller: Address,
+        advance_amount_usd_cents: U256,
+        expected_repayment_usd_cents: U256,
+    ) {
+        let investor = self.env().caller();
+        if advance_amount_usd_cents == U256::from(0u8)
+            || expected_repayment_usd_cents == U256::from(0u8)
+        {
+            self.revert(FundingVaultRevert::InvalidAmount);
+        }
+        if investor == seller {
+            self.revert(FundingVaultRevert::NotSeller);
+        }
+        if self.fundings.get(&invoice_id).is_some() {
+            self.revert(FundingVaultRevert::FundingAlreadyRegistered);
+        }
+
+        let next = self.liquidity_usd_cents.get_or_default() + advance_amount_usd_cents;
+        self.liquidity_usd_cents.set(next);
+        self.fundings.set(
+            &invoice_id,
+            VaultFunding {
+                invoice_id,
+                seller: seller.clone(),
+                investor: investor.clone(),
+                advance_amount_usd_cents,
+                expected_repayment_usd_cents,
+                seller_advance_claimed: false,
+                created_at: self.env().get_block_time_secs(),
+                claimed_at: None,
+            },
+        );
+        self.env().emit_event(VaultInvoiceFunded {
             invoice_id,
             seller,
             investor,

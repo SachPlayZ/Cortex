@@ -5,6 +5,7 @@ import { sha256Hex } from "@cortex/shared";
 import { createRequire } from "node:module";
 import { loadServerEnv } from "../../../server/env";
 import { getPaymentRuntime } from "../../../server/payment-runtime";
+import { extractInvoiceTextWithLocalOcr } from "../../../server/integrations/invoice-ocr";
 
 loadServerEnv();
 
@@ -17,6 +18,7 @@ type InvoiceEvidence = {
   fileName?: string;
   mimeType?: string;
   imageDataUrl?: string;
+  localOcrEngine?: string;
 };
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -26,24 +28,30 @@ export async function POST(req: NextRequest) {
   try {
     const contentType = req.headers.get("content-type") ?? "";
     let invoiceText: string;
-    let sellerWallet: string;
+    let sellerAccountHash: string;
+    let sellerPublicKey: string | undefined;
     let evidence: InvoiceEvidence | undefined;
 
     if (contentType.includes("multipart/form-data")) {
       const form = await req.formData();
       const file = form.get("file");
       const wallet = form.get("sellerWallet");
+      const publicKey = form.get("sellerPublicKey");
       if (!wallet || typeof wallet !== "string") {
         return NextResponse.json({ error: "sellerWallet required" }, { status: 400 });
+      }
+      if (publicKey && typeof publicKey !== "string") {
+        return NextResponse.json({ error: "sellerPublicKey must be a string" }, { status: 400 });
       }
       if (!file || typeof file === "string") {
         return NextResponse.json({ error: "file required" }, { status: 400 });
       }
-      evidence = await readInvoiceEvidence(file);
+      evidence = await readInvoiceEvidence(file, { allowVisionFallback: Boolean(process.env.GROQ_API_KEY) });
       invoiceText = evidence.invoiceText;
-      sellerWallet = wallet;
+      sellerAccountHash = wallet;
+      sellerPublicKey = publicKey || undefined;
     } else {
-      const body = (await req.json()) as { invoiceText?: string; sellerWallet?: string };
+      const body = (await req.json()) as { invoiceText?: string; sellerWallet?: string; sellerPublicKey?: string };
       if (!body.invoiceText || !body.sellerWallet) {
         return NextResponse.json({ error: "invoiceText and sellerWallet required" }, { status: 400 });
       }
@@ -55,7 +63,8 @@ export async function POST(req: NextRequest) {
         evidenceHash: sha256Hex(new TextEncoder().encode(invoiceText.trim())),
         mimeType: "text/plain"
       };
-      sellerWallet = body.sellerWallet;
+      sellerAccountHash = body.sellerWallet;
+      sellerPublicKey = body.sellerPublicKey;
     }
 
     const groqApiKey = process.env.GROQ_API_KEY;
@@ -63,9 +72,19 @@ export async function POST(req: NextRequest) {
     const groqVisionModel = process.env.GROQ_VISION_MODEL;
     const fxProvider = new FrankfurterFxRateProvider();
 
+    const { paymentStore } = await getPaymentRuntime();
+    const existingInvoices = await paymentStore.listInvoices();
+    const existingInvoiceHashes = new Set(existingInvoices.map((invoice) => invoice.invoiceHash));
+    const existingSellerInvoiceNumbers = new Set(
+      existingInvoices
+        .filter((invoice) => invoice.sellerAccount === sellerAccountHash)
+        .map((invoice) => invoice.title)
+        .filter((title): title is string => Boolean(title))
+    );
+
     const result = await runUnderwriting({
       invoiceText,
-      sellerWallet,
+      sellerWallet: sellerAccountHash,
       fxProvider,
       invoiceHash: evidence.invoiceHash,
       evidenceHash: evidence.evidenceHash,
@@ -74,13 +93,24 @@ export async function POST(req: NextRequest) {
       ...(evidence.mimeType ? { invoiceMimeType: evidence.mimeType } : {}),
       ...(groqApiKey ? { groqApiKey } : {}),
       ...(groqModel ? { groqModel } : {}),
-      ...(groqVisionModel ? { groqVisionModel } : {})
+      ...(groqVisionModel ? { groqVisionModel } : {}),
+      existingInvoiceHashes,
+      existingSellerInvoiceNumbers
     });
-    const { paymentStore } = await getPaymentRuntime();
+    const alreadyStored = await paymentStore.requireInvoice(result.invoiceId).catch(() => undefined);
+    if (alreadyStored) {
+      // Re-uploading the same evidence must not regress the stored lifecycle state.
+      return NextResponse.json(
+        { error: "This invoice is already underwritten", invoiceId: result.invoiceId },
+        { status: 409 }
+      );
+    }
     await paymentStore.upsertInvoice({
       id: result.invoiceId,
       title: result.parsed.invoice_number,
-      sellerAccount: sellerWallet,
+      sellerAccount: sellerAccountHash,
+      sellerPublicKey,
+      casperInvoiceIdHash: sha256Hex(result.invoiceId),
       invoiceHash: result.invoiceHash,
       originalCurrency: result.parsed.original_currency,
       originalAmountMinor: result.fx.original_amount_minor,
@@ -96,7 +126,8 @@ export async function POST(req: NextRequest) {
       dueDate: result.parsed.due_date,
       statusCasper: result.status === "rejected" ? "Rejected" : "Scored",
       attestationHash: result.attestationHash,
-      agentConfidence: result.parsed.extraction_confidence
+      agentConfidence: result.parsed.extraction_confidence,
+      casperInvoiceExists: false
     });
 
     return NextResponse.json({
@@ -117,7 +148,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function readInvoiceEvidence(file: File): Promise<InvoiceEvidence> {
+async function readInvoiceEvidence(file: File, options: { allowVisionFallback: boolean }): Promise<InvoiceEvidence> {
   const arrayBuffer = await file.arrayBuffer();
   const bytes = new Uint8Array(arrayBuffer);
   if (bytes.byteLength === 0) {
@@ -148,8 +179,36 @@ async function readInvoiceEvidence(file: File): Promise<InvoiceEvidence> {
   if (mimeType === "application/pdf") {
     const invoiceText = await extractPdfText(bytes);
     if (!invoiceText.trim()) {
+      const ocr = await extractInvoiceTextWithLocalOcr({ bytes, mimeType, fileName });
+      if (ocr?.text.trim()) {
+        return {
+          invoiceText: ocr.text,
+          invoiceHash: fileHash,
+          evidenceHash: fileHash,
+          fileName,
+          mimeType,
+          ...(ocr.renderedImageDataUrl ? { imageDataUrl: ocr.renderedImageDataUrl } : {}),
+          localOcrEngine: ocr.engine
+        };
+      }
+      if (options.allowVisionFallback) {
+        return {
+          invoiceText: [
+            "Scanned invoice PDF upload",
+            `File: ${fileName}`,
+            `MIME: ${mimeType}`,
+            `Evidence hash: ${fileHash}`
+          ].join("\n"),
+          invoiceHash: fileHash,
+          evidenceHash: fileHash,
+          fileName,
+          mimeType,
+          ...(ocr?.renderedImageDataUrl ? { imageDataUrl: ocr.renderedImageDataUrl } : {}),
+          ...(ocr?.engine ? { localOcrEngine: ocr.engine } : {})
+        };
+      }
       throw new Error(
-        "This PDF does not contain extractable text. Upload a PNG/JPG scan or paste the invoice text so OCR can process it."
+        "This PDF has no extractable text and local OCR could not recover fields. Upload a clearer scan, paste invoice text, or configure GROQ vision fallback."
       );
     }
     return {
@@ -162,18 +221,23 @@ async function readInvoiceEvidence(file: File): Promise<InvoiceEvidence> {
   }
 
   if (mimeType === "image/png" || mimeType === "image/jpeg" || mimeType === "image/webp") {
+    const imageDataUrl = `data:${mimeType};base64,${Buffer.from(bytes).toString("base64")}`;
+    const ocr = await extractInvoiceTextWithLocalOcr({ bytes, mimeType, fileName });
     return {
-      invoiceText: [
-        "Invoice image upload",
-        `File: ${fileName}`,
-        `MIME: ${mimeType}`,
-        `Evidence hash: ${fileHash}`
-      ].join("\n"),
+      invoiceText:
+        ocr?.text ??
+        [
+          "Invoice image upload",
+          `File: ${fileName}`,
+          `MIME: ${mimeType}`,
+          `Evidence hash: ${fileHash}`
+        ].join("\n"),
       invoiceHash: fileHash,
       evidenceHash: fileHash,
       fileName,
       mimeType,
-      imageDataUrl: `data:${mimeType};base64,${Buffer.from(bytes).toString("base64")}`
+      imageDataUrl,
+      ...(ocr?.engine ? { localOcrEngine: ocr.engine } : {})
     };
   }
 

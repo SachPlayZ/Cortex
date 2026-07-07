@@ -177,7 +177,7 @@ fn only_seller_lists_scored_invoice() {
         contracts
             .list_invoice(&account("not-seller"), &h(1))
             .unwrap_err(),
-        ContractError::InvalidStatus
+        ContractError::NotSeller
     );
 
     contracts.list_invoice(&account("seller"), &h(1)).unwrap();
@@ -199,7 +199,7 @@ fn investor_funds_listed_invoice() {
 
     assert_eq!(
         contracts.invoice(&h(1)).unwrap().status,
-        InvoiceStatus::Funded
+        InvoiceStatus::RepaymentPending
     );
     assert_eq!(
         contracts
@@ -255,12 +255,12 @@ fn funding_rejects_self_wrong_amount_unlisted_and_double_funding() {
         contracts
             .fund_invoice(account("investor2"), &h(1), 97_000)
             .unwrap_err(),
-        ContractError::InvalidStatus
+        ContractError::InvoiceAlreadyFunded
     );
 }
 
 #[test]
-fn seller_cashout_requires_funded_invoice_and_vault_liquidity() {
+fn seller_cashout_requires_repayment_pending_and_vault_liquidity() {
     let mut contracts = listed_invoice();
     assert_eq!(
         contracts
@@ -276,7 +276,7 @@ fn seller_cashout_requires_funded_invoice_and_vault_liquidity() {
         contracts
             .cash_out_advance(&account("not-seller"), &h(1))
             .unwrap_err(),
-        ContractError::InvalidStatus
+        ContractError::NotSeller
     );
 
     contracts
@@ -286,7 +286,7 @@ fn seller_cashout_requires_funded_invoice_and_vault_liquidity() {
         contracts
             .cash_out_advance(&account("seller"), &h(1))
             .unwrap_err(),
-        ContractError::AdvanceNotAvailable
+        ContractError::AdvanceAlreadyCashedOut
     );
 }
 
@@ -398,12 +398,22 @@ fn investor_claims_after_repayment_only_once() {
 fn default_only_after_due_and_reputation_slashes() {
     let mut contracts = funded_invoice();
     assert_eq!(
-        contracts.mark_default_after_due(&h(1)).unwrap_err(),
+        contracts
+            .mark_default_after_due(&account("relayer"), &h(1))
+            .unwrap_err(),
         ContractError::DefaultNotAllowed
     );
 
     contracts.set_now(200_000);
-    contracts.mark_default_after_due(&h(1)).unwrap();
+    assert_eq!(
+        contracts
+            .mark_default_after_due(&account("stranger"), &h(1))
+            .unwrap_err(),
+        ContractError::UnauthorizedRelayer
+    );
+    contracts
+        .mark_default_after_due(&account("relayer"), &h(1))
+        .unwrap();
 
     assert_eq!(
         contracts.invoice(&h(1)).unwrap().status,

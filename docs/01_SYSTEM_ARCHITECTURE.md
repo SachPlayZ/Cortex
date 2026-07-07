@@ -14,24 +14,24 @@
 ┌──────────────────────────┐   ┌───────────────────────────────┐
 │       Casper Testnet     │   │       Dodo Payments Test Mode  │
 │ InvoiceRegistry          │   │ Hosted checkout sessions       │
-│ FundingVault             │   │ Successful payment webhooks    │
-│ RepaymentEscrow          │   └───────────────┬───────────────┘
-│ AgentReputation          │                   │ verified webhook
-│ MockUSD / native CSPR    │                   ▼
-└───────────────┬──────────┘   ┌───────────────────────────────┐
-                │              │ Backend Settlement Relayer     │
-                │              │ - verifies webhook signature   │
-                │              │ - validates amount + metadata  │
-                │              │ - submits Casper repayment tx  │
-                │              └───────────────┬───────────────┘
-                │                              │
+│ native CSPR              │   │ Successful payment webhooks    │
+└───────────────┬──────────┘   └───────────────┬───────────────┘
+                │                              │ verified webhook
                 ▼                              ▼
-┌──────────────────────────┐   ┌───────────────────────────────┐
-│       CSPR.cloud          │   │        Agent Orchestrator      │
-│ REST API                  │   │ Parser | FX | Verification     │
-│ Streaming API             │   │ Risk | Reminder | Settlement   │
-│ Node API                  │   │ x402-paid tools/services       │
-└──────────────────────────┘   └───────────────────────────────┘
+┌──────────────────────────┐   │ Backend Settlement Relayer     │
+│       CSPR.cloud         │   │ - verifies webhook signature   │
+│ REST API                 │   │ - validates amount + metadata  │
+│ Streaming API            │   │ - submits Casper repayment tx  │
+│ Node API                 │   └───────────────┬───────────────┘
+└──────────────────────────┘                   │
+                │                              │
+                │                              ▼
+                │              ┌───────────────────────────────┐
+                │              │        Agent Orchestrator      │
+                │              │ Parser | FX | Verification     │
+                │              │ Risk | Reminder | Settlement   │
+                │              │ x402-paid tools/services       │
+                │              └───────────────────────────────┘
 ```
 
 ## Trust Boundaries
@@ -130,8 +130,8 @@ Path: `contracts/`
 Responsibilities:
 
 - Store invoice lifecycle.
-- Hold/record funding.
-- Record Dodo-originated repayment.
+- Hold/record funding inside `InvoiceRegistry`.
+- Record Dodo-originated repayment inside `InvoiceRegistry`.
 - Allow investor claims.
 - Update agent reputation.
 
@@ -304,7 +304,8 @@ POST /api/invoices/upload
 Investor clicks Fund
 → CSPR.click signs Casper transaction
 → FundingVault.fund_invoice(invoice_id)
-→ InvoiceRegistry status = FUNDED
+→ backend arms RepaymentEscrow position
+→ aggregate Casper status = RepaymentPending
 → CSPR.cloud stream updates UI
 ```
 

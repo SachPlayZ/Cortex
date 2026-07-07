@@ -1,10 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ArrowRightIcon, ChartNoAxesCombinedIcon, LandmarkIcon, TimerIcon, WalletCardsIcon } from "lucide-react";
 import { aprEquivalent, expectedReturnPercent, formatUsd, investorYield, type ReceivableView } from "../lib/finance";
 import { WalletGate, shortAccount, useCasperWallet } from "./casper-wallet";
+import { PageShell } from "./page-shell";
 import { StatusPill } from "./status-pill";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { Badge } from "./ui/badge";
 import { buttonVariants } from "./ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import { Skeleton } from "./ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { cn } from "@/lib/utils";
 
 export function InvestorMarketplace() {
@@ -29,130 +37,235 @@ function ConnectedInvestorMarketplace() {
   );
 
   return (
-    <>
-      <div className="mb-3.5 flex items-center justify-between gap-3">
-        <h2 className="m-0 text-lg font-bold tracking-tight text-ink">Investor marketplace</h2>
-        <span className="rounded-full border border-line bg-[rgba(24,24,28,0.88)] px-2.5 py-1.5 text-xs font-semibold text-ink">
-          Investor wallet {shortAccount(wallet.accountHash)}
-        </span>
-      </div>
-
-      <section className="mb-10 grid grid-cols-3 gap-3 max-sm:grid-cols-1">
-        <div className="flex flex-col gap-1.5 rounded-[10px] border border-line bg-panel px-6 py-[22px]">
-          <div className="text-[11px] font-medium uppercase tracking-widest text-ink-muted">Portfolio committed</div>
-          <div className="text-[26px] font-extrabold tracking-[-0.03em] tabular-nums text-ink">{formatUsd(committed.toString())}</div>
-          <div className="mt-0.5 text-xs text-ink-muted-2">Crypto-funded receivable positions for this wallet</div>
-        </div>
-        <div className="flex flex-col gap-1.5 rounded-[10px] border border-line bg-panel px-6 py-[22px]">
-          <div className="text-[11px] font-medium uppercase tracking-widest text-ink-muted">Expected yield</div>
-          <div className="text-[26px] font-extrabold tracking-[-0.03em] tabular-nums text-good">{formatUsd(expectedYield.toString())}</div>
-          <div className="mt-0.5 text-xs text-ink-muted-2">Claims unlock after Dodo webhook settlement</div>
-        </div>
-        <div className="flex flex-col gap-1.5 rounded-[10px] border border-line bg-panel px-6 py-[22px]">
-          <div className="text-[11px] font-medium uppercase tracking-widest text-ink-muted">Open listings</div>
-          <div className="text-[26px] font-extrabold tracking-[-0.03em] tabular-nums text-ink">{marketplace.invoices.length}</div>
-          <div className="mt-0.5 text-xs text-ink-muted-2">Live receivables listed from real uploads</div>
-        </div>
+    <PageShell
+      eyebrow={`Investor wallet ${shortAccount(wallet.accountHash)}`}
+      title="Receivables market with the math up front."
+      description="Fund one listed invoice at a time, then wait for Dodo webhook settlement before claiming on Casper."
+    >
+      <section className="grid gap-4 md:grid-cols-3">
+        <Metric icon={WalletCardsIcon} label="Committed" value={formatUsd(committed.toString())} sub="Funding signed by this wallet" />
+        <Metric icon={ChartNoAxesCombinedIcon} label="Expected yield" value={formatUsd(expectedYield.toString())} sub="Unlocked after verified repayment" active />
+        <Metric icon={LandmarkIcon} label="Open listings" value={String(marketplace.invoices.length)} sub="Receivables currently listed" />
       </section>
 
-      <div className="mb-3.5 flex items-center gap-3">
-        <h2 className="m-0 text-lg font-bold tracking-tight text-ink">Available receivables</h2>
-      </div>
-      {marketplace.state === "loading" ? (
-        <EmptyState><p className="text-ink">Loading marketplace...</p></EmptyState>
-      ) : null}
-      {marketplace.state === "error" ? (
-        <EmptyState>
-          <p className="text-ink">Marketplace unavailable</p>
-          <p className="m-0 text-xs text-bad">{marketplace.error}</p>
-        </EmptyState>
-      ) : null}
-      {marketplace.state === "ready" && marketplace.invoices.length === 0 ? (
-        <EmptyState>
-          <p className="text-lg font-bold tracking-tight text-ink">No listed receivables yet.</p>
-          <p className="m-0 text-xs leading-relaxed text-ink-muted">
-            Clean slate. Invoices appear here only after real seller underwriting and Casper listing.
-          </p>
-        </EmptyState>
-      ) : null}
+      <Tabs defaultValue="market" className="gap-6">
+        <TabsList>
+          <TabsTrigger value="market">Market</TabsTrigger>
+          <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
+        </TabsList>
 
-      {marketplace.invoices.length > 0 ? (
-        <section className="mb-9 grid grid-cols-2 gap-3 max-sm:grid-cols-1">
-          {marketplace.invoices.map((invoice) => (
-            <article key={invoice.id} className="grid gap-4 rounded-[10px] border border-line bg-[rgba(17,17,22,0.84)] p-5">
-              <div className="flex justify-between gap-4">
-                <div>
-                  <span className="text-[11px] font-medium uppercase tracking-widest text-ink-muted">{invoice.id}</span>
-                  <h3 className="mt-1.5 m-0 text-lg font-bold tracking-[-0.02em] text-ink">{invoice.title ?? "Receivable"}</h3>
-                </div>
-                <StatusPill status={invoice.statusCasper} />
-              </div>
-              <div className="grid grid-cols-4 gap-2.5 max-sm:grid-cols-2">
-                <NumberStat label="Fund" value={formatUsd(invoice.advanceAmountUsdCents ?? "0")} />
-                <NumberStat label="Receive" value={formatUsd(invoice.repaymentAmountUsdCents)} />
-                <NumberStat label="Yield" value={`${formatUsd(invoice.investorYieldUsdCents ?? investorYield(invoice))} / ${expectedReturnPercent(invoice)}`} />
-                <NumberStat label="APR display" value={aprEquivalent(invoice)} />
-              </div>
-              <p className="m-0 text-xs leading-relaxed text-ink-muted">
-                Risk {invoice.riskTier ?? "pending"} / {invoice.riskScore ?? "-"}.
-                {invoice.dueDate ? ` Due ${invoice.dueDate}.` : ""} Agent confidence{" "}
-                {invoice.agentConfidence ? `${(invoice.agentConfidence * 100).toFixed(0)}%` : "pending"}.
-              </p>
-              <a href={`/invoice/${invoice.id}`} className={cn(buttonVariants({ size: "sm" }), "w-fit")}>Inspect and fund</a>
-            </article>
-          ))}
-        </section>
-      ) : null}
+        <TabsContent value="market" id="marketplace" className="scroll-mt-28">
+          <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h2 className="m-0 text-2xl font-semibold tracking-normal text-foreground">Available receivables</h2>
+              <p className="m-0 mt-2 text-sm text-muted-foreground">Only scored and listed invoices appear here.</p>
+            </div>
+            <Badge variant="secondary">{marketplace.invoices.length} live</Badge>
+          </div>
+          <ReceivableState
+            state={marketplace.state}
+            error={marketplace.error}
+            isEmpty={marketplace.invoices.length === 0}
+            emptyTitle="No listed receivables yet"
+            emptyBody="Seller uploads and Casper listings will appear here when ready."
+          />
+          {marketplace.invoices.length > 0 ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {marketplace.invoices.map((invoice) => (
+                <MarketCard key={invoice.id} invoice={invoice} />
+              ))}
+            </div>
+          ) : null}
+        </TabsContent>
 
-      <div className="mb-3.5 flex items-center gap-3">
-        <h2 className="m-0 text-lg font-bold tracking-tight text-ink">Current portfolio</h2>
-      </div>
-      {portfolio.state === "ready" && portfolio.invoices.length === 0 ? (
-        <EmptyState>
-          <p className="text-lg font-bold tracking-tight text-ink">No funded invoices for this wallet yet.</p>
-          <p className="m-0 text-xs leading-relaxed text-ink-muted">Fund a listed receivable to add it to this connected wallet&apos;s portfolio.</p>
-        </EmptyState>
-      ) : null}
-      {portfolio.invoices.length > 0 ? (
-        <section className="grid gap-1.5">
-          {portfolio.invoices.map((invoice) => (
-            <a
-              key={invoice.id}
-              href={`/invoice/${invoice.id}`}
-              className="grid grid-cols-[1.4fr_0.8fr_0.8fr_0.9fr_60px] items-center gap-3.5 rounded-[10px] border border-line bg-panel px-4 py-3.5 text-inherit transition-colors hover:border-ink-muted-2 hover:bg-panel-elevated max-sm:grid-cols-1"
-            >
-              <div>
-                <strong className="text-ink">{invoice.id}</strong>
-                <br />
-                <span className="text-xs text-ink-muted">Due {invoice.dueDate ?? "not set"}</span>
-              </div>
-              <div className="tabular-nums text-ink">{formatUsd(invoice.advanceAmountUsdCents ?? "0")} funded</div>
-              <div className="tabular-nums text-ink">{formatUsd(invoice.investorYieldUsdCents ?? investorYield(invoice))} yield</div>
-              <div><StatusPill status={invoice.statusCasper} /></div>
-              <div className="text-sm font-semibold text-ink-muted">Claim</div>
-            </a>
-          ))}
-        </section>
-      ) : null}
-    </>
+        <TabsContent value="portfolio">
+          <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h2 className="m-0 text-2xl font-semibold tracking-normal text-foreground">Current portfolio</h2>
+              <p className="m-0 mt-2 text-sm text-muted-foreground">Claim actions unlock only after Casper records repayment.</p>
+            </div>
+            <Badge variant="secondary">{portfolio.invoices.length} positions</Badge>
+          </div>
+          <ReceivableState
+            state={portfolio.state}
+            error={portfolio.error}
+            isEmpty={portfolio.invoices.length === 0}
+            emptyTitle="No funded invoices for this wallet yet"
+            emptyBody="Fund a listed receivable to add it to this portfolio."
+          />
+          {portfolio.invoices.length > 0 ? <PortfolioTable invoices={portfolio.invoices} /> : null}
+        </TabsContent>
+      </Tabs>
+    </PageShell>
   );
 }
 
-function EmptyState({ children }: { children: React.ReactNode }) {
+function Metric({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  active
+}: {
+  icon: typeof WalletCardsIcon;
+  label: string;
+  value: string;
+  sub: string;
+  active?: boolean;
+}) {
   return (
-    <section className="mb-6 grid gap-4 rounded-[10px] border border-line bg-gradient-to-b from-[rgba(24,24,28,0.96)] to-[rgba(17,17,22,0.96)] p-[22px]">
-      {children}
-    </section>
+    <Card className={cn("rounded-2xl border-white/10 bg-card/72", active && "bg-primary text-primary-foreground")}>
+      <CardHeader>
+        <div className={cn("mb-4 grid size-10 place-items-center rounded-full border border-white/10 bg-white/[0.035]", active && "bg-primary-foreground/12")}>
+          <Icon />
+        </div>
+        <CardDescription className={active ? "text-primary-foreground/70" : undefined}>{label}</CardDescription>
+        <CardTitle className="text-4xl tracking-normal tabular-nums">{value}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className={cn("m-0 text-sm leading-6 text-muted-foreground", active && "text-primary-foreground/72")}>{sub}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MarketCard({ invoice }: { invoice: ReceivableView }) {
+  return (
+    <article className="group overflow-hidden rounded-2xl border border-white/10 bg-card/72 transition-colors hover:bg-card">
+      <div className="relative h-44 overflow-hidden">
+        <img
+          src={`https://picsum.photos/seed/${encodeURIComponent(invoice.id)}/1000/520`}
+          alt=""
+          className="absolute inset-0 size-full object-cover opacity-55 grayscale contrast-125 transition-transform duration-700 ease-out group-hover:scale-105"
+        />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(8,11,15,0.1),rgba(8,11,15,0.9))]" />
+        <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-5">
+          <div className="min-w-0">
+            <Badge variant="secondary">{invoice.riskTier ? `${invoice.riskTier} risk` : "Receivable"}</Badge>
+            <h3 className="mt-3 truncate text-2xl font-semibold tracking-normal text-foreground">{invoice.title ?? invoice.id}</h3>
+          </div>
+          <StatusPill status={invoice.statusCasper} />
+        </div>
+      </div>
+      <div className="grid gap-4 p-5">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <NumberStat label="Fund" value={formatUsd(invoice.advanceAmountUsdCents ?? "0")} />
+          <NumberStat label="Receive" value={formatUsd(invoice.repaymentAmountUsdCents)} />
+          <NumberStat label="Yield" value={formatUsd(invoice.investorYieldUsdCents ?? investorYield(invoice))} />
+          <NumberStat label="APR display" value={aprEquivalent(invoice)} />
+        </div>
+        <p className="m-0 text-sm leading-6 text-muted-foreground">
+          Risk {invoice.riskTier ?? "pending"} / {invoice.riskScore ?? "-"}. Due {invoice.dueDate ?? "not set"}.
+          Agent confidence {invoice.agentConfidence ? `${(invoice.agentConfidence * 100).toFixed(0)}%` : "pending"}.
+        </p>
+        <a href={`/invoice/${invoice.id}`} className={cn(buttonVariants({ size: "sm" }), "w-fit")}>
+          Inspect and fund
+          <ArrowRightIcon data-icon="inline-end" />
+        </a>
+      </div>
+    </article>
+  );
+}
+
+function PortfolioTable({ invoices }: { invoices: ReceivableView[] }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/10 bg-card/72">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Invoice</TableHead>
+            <TableHead>Funded</TableHead>
+            <TableHead>Yield</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Action</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {invoices.map((invoice) => (
+            <TableRow key={invoice.id}>
+              <TableCell>
+                <a href={`/invoice/${invoice.id}`} className="font-semibold text-foreground hover:text-primary">
+                  {invoice.title ?? invoice.id}
+                </a>
+                <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <TimerIcon />
+                  Due {invoice.dueDate ?? "not set"}
+                </div>
+              </TableCell>
+              <TableCell className="tabular-nums">{formatUsd(invoice.advanceAmountUsdCents ?? "0")}</TableCell>
+              <TableCell className="tabular-nums">{formatUsd(invoice.investorYieldUsdCents ?? investorYield(invoice))}</TableCell>
+              <TableCell><StatusPill status={invoice.statusCasper} /></TableCell>
+              <TableCell>{portfolioActionLabel(invoice.statusCasper)}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+function ReceivableState({
+  state,
+  error,
+  isEmpty,
+  emptyTitle,
+  emptyBody
+}: {
+  state: "loading" | "ready" | "error";
+  error: string;
+  isEmpty: boolean;
+  emptyTitle: string;
+  emptyBody: string;
+}) {
+  if (state === "loading") {
+    return (
+      <div className="mb-6 grid gap-3">
+        {[0, 1].map((item) => (
+          <Skeleton key={item} className="h-48 rounded-2xl" />
+        ))}
+      </div>
+    );
+  }
+  if (state === "error") {
+    return (
+      <Alert variant="destructive" className="mb-6">
+        <AlertTitle>Receivables unavailable</AlertTitle>
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
+    );
+  }
+  if (!isEmpty) return null;
+
+  return (
+    <div className="mb-6 rounded-2xl border border-white/10 bg-card/72 p-6">
+      <h3 className="m-0 text-2xl font-semibold tracking-normal text-foreground">{emptyTitle}</h3>
+      <p className="m-0 mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{emptyBody}</p>
+    </div>
   );
 }
 
 function NumberStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid min-w-0 gap-1 rounded-lg border border-line-subtle bg-[rgba(9,9,11,0.36)] p-3">
-      <span className="text-[11px] font-medium uppercase tracking-widest text-ink-muted">{label}</span>
-      <strong className="overflow-anywhere font-semibold text-ink">{value}</strong>
+    <div className="min-w-0 rounded-xl border border-white/10 bg-white/[0.035] p-3">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <strong className="mt-1 block truncate font-semibold tabular-nums text-foreground">{value}</strong>
     </div>
   );
+}
+
+function portfolioActionLabel(status: string) {
+  switch (status) {
+    case "Funded":
+      return "Await seller cash out";
+    case "RepaymentPending":
+      return "Await buyer repayment";
+    case "Repaid":
+      return "Claim now";
+    case "Settled":
+      return "Settled";
+    default:
+      return "Open";
+  }
 }
 
 function useReceivables(filter: { role?: "investor"; account?: string; status?: string }) {

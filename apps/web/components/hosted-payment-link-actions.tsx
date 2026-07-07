@@ -1,10 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { CopyIcon, MailIcon, SendIcon } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Button, buttonVariants } from "./ui/button";
-import { cn } from "@/lib/utils";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field";
 import { Input } from "./ui/input";
-import { Label } from "./ui/label";
+import { Spinner } from "./ui/spinner";
+import { cn } from "@/lib/utils";
 
 export function HostedPaymentLinkActions({ invoiceId }: { invoiceId: string }) {
   const [checkoutUrl, setCheckoutUrl] = useState("");
@@ -42,37 +45,55 @@ export function HostedPaymentLinkActions({ invoiceId }: { invoiceId: string }) {
     : "";
 
   return (
-    <div className="flex flex-wrap items-end gap-2.5">
-      <div className="grid min-w-[min(260px,100%)] gap-1.5">
-        <Label className="text-xs font-semibold text-ink-muted">Optional client email</Label>
-        <Input
-          placeholder="client@company.com"
-          type="email"
-          value={clientEmail}
-          onChange={(event) => setClientEmail(event.target.value)}
-          className="border-line bg-[#0b0d10] text-ink focus-visible:border-accent-2/50"
-        />
-      </div>
-      <Button variant="outline" size="sm" type="button" onClick={generateLink} disabled={state === "loading"}>
-        {state === "loading" ? "Generating..." : "Generate hosted Dodo link"}
-      </Button>
+    <div className="flex flex-col gap-4">
+      <FieldGroup className="md:flex-row md:items-end">
+        <Field className="min-w-[min(280px,100%)]">
+          <FieldLabel htmlFor={`client-email-${invoiceId}`}>Client email</FieldLabel>
+          <Input
+            id={`client-email-${invoiceId}`}
+            placeholder="client@company.com"
+            type="email"
+            value={clientEmail}
+            onChange={(event) => setClientEmail(event.target.value)}
+          />
+          <FieldDescription>Optional. Used only to prepare a reminder email.</FieldDescription>
+        </Field>
+        <Button variant="outline" size="sm" type="button" onClick={generateLink} disabled={state === "loading"}>
+          {state === "loading" ? <Spinner data-icon="inline-start" /> : <SendIcon data-icon="inline-start" />}
+          {state === "loading" ? "Generating" : "Generate hosted Dodo link"}
+        </Button>
+      </FieldGroup>
+
       {checkoutUrl ? (
-        <>
-          <p className="w-full break-all font-mono text-[11.5px] text-ink-muted">{checkoutUrl}</p>
-          <Button variant="outline" size="sm" type="button" onClick={() => void navigator.clipboard.writeText(checkoutUrl)}>
-            Copy hosted link
-          </Button>
-          {clientEmail ? (
-            <a href={reminderHref} className={cn(buttonVariants({ size: "sm" }))}>Email hosted link</a>
-          ) : null}
-        </>
+        <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.035] p-3">
+          <p className="m-0 break-all font-mono text-xs text-muted-foreground">{checkoutUrl}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" type="button" onClick={() => void navigator.clipboard.writeText(checkoutUrl)}>
+              <CopyIcon data-icon="inline-start" />
+              Copy link
+            </Button>
+            {clientEmail ? (
+              <a href={reminderHref} className={cn(buttonVariants({ size: "sm" }))}>
+                <MailIcon data-icon="inline-start" />
+                Email link
+              </a>
+            ) : null}
+          </div>
+        </div>
       ) : null}
+
       {state === "ready" ? (
-        <p className="m-0 w-full text-xs leading-relaxed text-ink-muted">
-          Hosted checkout link copied. Send only this link to the client.
-        </p>
+        <Alert>
+          <AlertTitle>Hosted checkout copied</AlertTitle>
+          <AlertDescription>Send only this link to the client. Cortex still waits for the signed webhook.</AlertDescription>
+        </Alert>
       ) : null}
-      {state === "error" ? <p className="m-0 text-xs text-bad">{error}</p> : null}
+      {state === "error" ? (
+        <Alert variant="destructive">
+          <AlertTitle>Hosted link failed</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
     </div>
   );
 }

@@ -1,8 +1,7 @@
-import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import type { InvoiceStatus } from "@cortex/shared";
 import { type PaymentStore, type RelayerJobRecord } from "./payment-store";
-import { toHash32Bytes, stripHashPrefix } from "./casper-sdk";
+import { CasperLifecycleClient } from "./casper-sdk";
 
 export type CasperInvoiceSnapshot = {
   invoiceId: string;
@@ -53,7 +52,8 @@ export class MemoryCasperSettlementClient implements CasperSettlementClient {
     const deployHash = `casper-deploy-${this.deployCounter.toString().padStart(4, "0")}`;
     await this.store.updateInvoice(input.invoiceId, {
       statusCasper: "Repaid",
-      lastRepaymentDeployHash: deployHash
+      lastRepaymentDeployHash: deployHash,
+      statusLastSyncedAt: new Date().toISOString()
     });
     return { deployHash };
   }
@@ -66,22 +66,31 @@ const casperSdk = require("casper-js-sdk") as CasperSdk;
 export type CasperSdkSettlementClientConfig = {
   rpcUrl: string;
   chainName: string;
-  packageHash: string;
+  registryPackageHash: string;
+  repaymentEscrowPackageHash: string;
+  agentReputationPackageHash: string;
   relayerPrivateKeyPath: string;
   paymentMotes?: number | undefined;
 };
 
 export class CasperSdkSettlementClient implements CasperSettlementClient {
   private readonly rpcClient: InstanceType<CasperSdk["RpcClient"]>;
-  private readonly paymentMotes: number;
-  private relayerKey: ReturnType<CasperSdk["PrivateKey"]["fromPem"]> | undefined;
+  private readonly lifecycle: CasperLifecycleClient;
 
   constructor(
     private readonly store: PaymentStore,
     private readonly config: CasperSdkSettlementClientConfig
   ) {
     this.rpcClient = new casperSdk.RpcClient(new casperSdk.HttpHandler(config.rpcUrl, "fetch"));
-    this.paymentMotes = config.paymentMotes ?? 2_500_000_000;
+    this.lifecycle = new CasperLifecycleClient({
+      rpcUrl: config.rpcUrl,
+      chainName: config.chainName,
+      registryPackageHash: config.registryPackageHash,
+      fundingVaultPackageHash: process.env.FUNDING_VAULT_PACKAGE_HASH ?? "",
+      repaymentEscrowPackageHash: config.repaymentEscrowPackageHash,
+      agentReputationPackageHash: config.agentReputationPackageHash,
+      paymentMotes: config.paymentMotes
+    });
   }
 
   async getInvoice(invoiceId: string): Promise<CasperInvoiceSnapshot> {
@@ -102,40 +111,29 @@ export class CasperSdkSettlementClient implements CasperSettlementClient {
       throw new Error("Casper rejected underpayment");
     }
 
-    const relayerKey = await this.getRelayerKey();
-    const transaction = new casperSdk.ContractCallBuilder()
-      .byPackageHash(stripHashPrefix(this.config.packageHash))
-      .entryPoint("record_gateway_repayment")
-      .from(relayerKey.publicKey)
-      .chainName(this.config.chainName)
-      .payment(this.paymentMotes)
-      .runtimeArgs(
-        casperSdk.Args.fromMap({
-          invoice_id: casperSdk.CLValue.newCLByteArray(toHash32Bytes(input.invoiceId)),
-          gateway_payment_hash: casperSdk.CLValue.newCLByteArray(toHash32Bytes(input.gatewayPaymentHash)),
-          webhook_event_hash: casperSdk.CLValue.newCLByteArray(toHash32Bytes(input.paymentAttestationHash)),
-          paid_amount_usd_cents: casperSdk.CLValue.newCLUInt256(input.paidAmountUsdCents)
-        })
-      )
-      .build();
-    transaction.sign(relayerKey);
-
-    const result = await this.rpcClient.putTransaction(transaction);
-    const deployHash = result.transactionHash.toHex();
+    const deployHash = await this.lifecycle.recordGatewayRepayment(
+      input.invoiceId,
+      input.gatewayPaymentHash,
+      input.paymentAttestationHash,
+      input.paidAmountUsdCents,
+      { keyPath: this.config.relayerPrivateKeyPath }
+    );
     await this.waitForTransaction(deployHash);
+    await this.noteSuccessfulReputation();
     await this.store.updateInvoice(input.invoiceId, {
       statusCasper: "Repaid",
-      lastRepaymentDeployHash: deployHash
+      lastRepaymentDeployHash: deployHash,
+      statusLastSyncedAt: new Date().toISOString()
     });
     return { deployHash };
   }
 
-  private async getRelayerKey(): Promise<ReturnType<CasperSdk["PrivateKey"]["fromPem"]>> {
-    if (!this.relayerKey) {
-      const pem = await readFile(this.config.relayerPrivateKeyPath, "utf8");
-      this.relayerKey = casperSdk.PrivateKey.fromPem(pem, casperSdk.KeyAlgorithm.SECP256K1);
-    }
-    return this.relayerKey;
+  private async noteSuccessfulReputation() {
+    const adminKeyPath = process.env.CASPER_ADMIN_PRIVATE_KEY_PATH;
+    const agentPublicKey = process.env.AGENT_PUBLIC_KEY;
+    if (!adminKeyPath || !agentPublicKey) return;
+    const deployHash = await this.lifecycle.noteSuccessfulRepayment(agentPublicKey, { keyPath: adminKeyPath });
+    await this.waitForTransaction(deployHash);
   }
 
   private async waitForTransaction(transactionHash: string, timeoutMs = 120_000): Promise<void> {
@@ -157,6 +155,10 @@ export class CasperSdkSettlementClient implements CasperSettlementClient {
         const executionResult = raw?.execution_info?.execution_result;
         const errorMessage = executionResult?.error_message ?? executionResult?.Version2?.error_message;
         if (errorMessage) throw new Error(errorMessage);
+        if (!executionResult) {
+          await new Promise((resolve) => setTimeout(resolve, 5_000));
+          continue;
+        }
         return;
       } catch (error) {
         lastError = error instanceof Error ? error.message : "unknown error";

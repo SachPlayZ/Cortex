@@ -114,6 +114,7 @@ pub enum CortexRevert {
     EscrowInsufficientLiquidity = 1020,
     DefaultNotAllowed = 1021,
     UnknownInvoice = 1022,
+    NotSeller = 1023,
 }
 
 #[odra::event]
@@ -371,7 +372,7 @@ impl InvoiceRegistry {
     pub fn list_invoice(&mut self, invoice_id: Hash32) {
         let mut invoice = self.invoice_or_revert(&invoice_id);
         if invoice.seller != self.env().caller() {
-            self.revert(CortexRevert::InvalidStatus);
+            self.revert(CortexRevert::NotSeller);
         }
         if invoice.status != InvoiceStatus::Scored || invoice.risk_tier == RiskTier::Rejected {
             self.revert(CortexRevert::InvalidStatus);
@@ -388,14 +389,14 @@ impl InvoiceRegistry {
     pub fn fund_invoice(&mut self, invoice_id: Hash32, funded_amount_usd_cents: U256) {
         let investor = self.env().caller();
         let mut invoice = self.invoice_or_revert(&invoice_id);
+        if invoice.investor.is_some() {
+            self.revert(CortexRevert::InvoiceAlreadyFunded);
+        }
         if invoice.status != InvoiceStatus::Listed {
             self.revert(CortexRevert::InvalidStatus);
         }
         if investor == invoice.seller {
             self.revert(CortexRevert::SellerCannotFundOwnInvoice);
-        }
-        if invoice.investor.is_some() {
-            self.revert(CortexRevert::InvoiceAlreadyFunded);
         }
         if invoice.due_timestamp <= self.now() {
             self.revert(CortexRevert::InvoiceExpired);
@@ -405,7 +406,7 @@ impl InvoiceRegistry {
         }
 
         invoice.investor = Some(investor.clone());
-        invoice.status = InvoiceStatus::Funded;
+        invoice.status = InvoiceStatus::RepaymentPending;
         invoice.funded_at = Some(self.now());
         let next_liquidity =
             self.vault_liquidity_usd_cents.get_or_default() + funded_amount_usd_cents;
@@ -432,9 +433,9 @@ impl InvoiceRegistry {
         let seller = self.env().caller();
         let mut invoice = self.invoice_or_revert(&invoice_id);
         if invoice.seller != seller {
-            self.revert(CortexRevert::InvalidStatus);
+            self.revert(CortexRevert::NotSeller);
         }
-        if invoice.status != InvoiceStatus::Funded {
+        if invoice.status != InvoiceStatus::RepaymentPending {
             self.revert(CortexRevert::AdvanceNotAvailable);
         }
         if invoice.seller_advance_claimed {
@@ -449,7 +450,6 @@ impl InvoiceRegistry {
             .set(available - invoice.advance_amount_usd_cents);
         invoice.seller_advance_claimed = true;
         invoice.seller_advance_claimed_at = Some(self.now());
-        invoice.status = InvoiceStatus::RepaymentPending;
         let amount_usd_cents = invoice.advance_amount_usd_cents;
         self.invoices.set(&invoice_id, invoice);
         self.env().emit_event(SellerAdvanceCashedOut {
@@ -556,6 +556,11 @@ impl InvoiceRegistry {
     }
 
     pub fn mark_default_after_due(&mut self, invoice_id: Hash32) {
+        let caller = self.env().caller();
+        let is_admin = self.admin.get() == Some(caller.clone());
+        if !is_admin && !self.settlement_relayers.get_or_default(&caller) {
+            self.revert(CortexRevert::UnauthorizedRelayer);
+        }
         let mut invoice = self.invoice_or_revert(&invoice_id);
         if invoice.status != InvoiceStatus::RepaymentPending {
             self.revert(CortexRevert::DefaultNotAllowed);
@@ -712,8 +717,6 @@ mod tests {
 
         env.set_caller(investor.clone());
         contract.fund_invoice(h(1), U256::from(97_000u64));
-        env.set_caller(seller.clone());
-        contract.cash_out_advance(h(1));
 
         env.set_caller(relayer.clone());
         contract.record_gateway_repayment(h(1), h(10), h(11), U256::from(100_000u64));
@@ -760,8 +763,6 @@ mod tests {
         contract.list_invoice(h(1));
         env.set_caller(investor.clone());
         contract.fund_invoice(h(1), U256::from(97_000u64));
-        env.set_caller(seller.clone());
-        contract.cash_out_advance(h(1));
         env.set_caller(relayer.clone());
         contract.record_gateway_repayment(h(1), h(10), h(11), U256::from(100_000u64));
 
@@ -781,8 +782,6 @@ mod tests {
         contract.list_invoice(h(21));
         env.set_caller(investor.clone());
         contract.fund_invoice(h(21), U256::from(97_000u64));
-        env.set_caller(seller.clone());
-        contract.cash_out_advance(h(21));
         env.set_caller(relayer.clone());
         assert!(contract
             .try_record_gateway_repayment(h(21), h(10), h(12), U256::from(100_000u64))

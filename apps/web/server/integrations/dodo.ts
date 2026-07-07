@@ -13,6 +13,14 @@ import { type CasperSettlementClient, SettlementRelayer } from "./settlement-rel
 
 const SUCCESSFUL_DODO_EVENT_TYPE = "payment.succeeded";
 
+export function dodoEnvironment(): "test_mode" | "live_mode" {
+  return process.env.DODO_ENVIRONMENT === "live_mode" ? "live_mode" : "test_mode";
+}
+
+export function dodoBaseUrl(): string {
+  return dodoEnvironment() === "live_mode" ? "https://live.dodopayments.com" : "https://test.dodopayments.com";
+}
+
 type JsonRecord = Record<string, unknown>;
 
 export type CreateCheckoutInput = {
@@ -41,7 +49,7 @@ export class HttpDodoCheckoutClient implements DodoCheckoutClient {
   constructor(
     private readonly apiKey: string,
     private readonly productId: string,
-    private readonly baseUrl = "https://test.dodopayments.com",
+    private readonly baseUrl = dodoBaseUrl(),
     private readonly returnUrl?: string,
     private readonly cancelUrl?: string
   ) {}
@@ -130,13 +138,17 @@ export async function createDodoCheckout(params: {
   store: PaymentStore;
   casper: CasperSettlementClient;
   dodo: DodoCheckoutClient;
+  readVerifiedInvoiceState?: ((invoiceId: string) => Promise<{ statusCasper: string; repaymentAmountUsdCents: string }>) | undefined;
   nonceFactory?: () => string;
   now?: () => Date;
 }): Promise<CreateCheckoutResult> {
   const invoice = await params.store.requireInvoice(params.input.invoiceId);
-  const casperInvoice = await params.casper.getInvoice(params.input.invoiceId);
-  if (casperInvoice.status !== "RepaymentPending") {
-    throw new Error(`Checkout blocked until Casper status is RepaymentPending, got ${casperInvoice.status}`);
+  const casperInvoice = params.readVerifiedInvoiceState
+    ? await params.readVerifiedInvoiceState(params.input.invoiceId)
+    : await params.casper.getInvoice(params.input.invoiceId);
+  const status = "statusCasper" in casperInvoice ? casperInvoice.statusCasper : casperInvoice.status;
+  if (status !== "RepaymentPending") {
+    throw new Error(`Checkout blocked until Casper status is RepaymentPending, got ${status}`);
   }
   if (casperInvoice.repaymentAmountUsdCents !== invoice.repaymentAmountUsdCents) {
     throw new Error("Checkout blocked by Casper/local repayment amount mismatch");
@@ -147,7 +159,7 @@ export async function createDodoCheckout(params: {
     invoice_hash: invoice.invoiceHash,
     expected_amount_usd_cents: invoice.repaymentAmountUsdCents,
     nonce: params.nonceFactory?.() ?? randomBytes(16).toString("hex"),
-    environment: "test_mode",
+    environment: dodoEnvironment(),
     purpose: "cortex_invoice_repayment"
   });
   const checkoutRequest: DodoCheckoutCreateRequest = {
@@ -195,8 +207,10 @@ export async function handleDodoWebhook(params: {
   webhookSecret: string;
   store: PaymentStore;
   casper: CasperSettlementClient;
+  readVerifiedInvoiceState?: ((invoiceId: string) => Promise<{ statusCasper: string; repaymentAmountUsdCents: string }>) | undefined;
   secretFormat?: "standard" | "raw";
   now?: () => Date;
+  deferSettlement?: boolean;
 }): Promise<DodoWebhookHandleResult> {
   let payload: unknown;
   try {
@@ -250,8 +264,11 @@ export async function handleDodoWebhook(params: {
     return { outcome: "rejected", reason: "underpayment" };
   }
 
-  const casperInvoice = await params.casper.getInvoice(invoice.id);
-  if (casperInvoice.status !== "RepaymentPending") {
+  const casperInvoice = params.readVerifiedInvoiceState
+    ? await params.readVerifiedInvoiceState(invoice.id)
+    : await params.casper.getInvoice(invoice.id);
+  const casperStatus = "statusCasper" in casperInvoice ? casperInvoice.statusCasper : casperInvoice.status;
+  if (casperStatus !== "RepaymentPending") {
     return { outcome: "rejected", reason: "casper_status_not_repayment_pending" };
   }
 
@@ -286,6 +303,14 @@ export async function handleDodoWebhook(params: {
     status: "queued",
     attempts: 0
   };
+  if (params.deferSettlement) {
+    const queuedJob = await params.store.upsertRelayerJob(relayerJob);
+    return {
+      outcome: "accepted",
+      webhook: (await params.store.getWebhookByEventId(webhookRecord.eventId)) ?? webhookRecord,
+      relayerJob: queuedJob
+    };
+  }
   const submittedJob = await new SettlementRelayer(params.store, params.casper).submit(relayerJob);
   return {
     outcome: "accepted",

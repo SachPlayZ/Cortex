@@ -41,8 +41,9 @@ export async function runUnderwriting(input: {
         now
       })
     : parseInvoiceText({ invoiceText: input.invoiceText, now });
-  const invoiceHash = input.invoiceHash ?? sha256Hex(input.invoiceText);
-  const evidenceHash = input.evidenceHash ?? sha256Hex(input.invoiceText.trim());
+  const canonicalInvoiceText = input.invoiceText.trim();
+  const invoiceHash = input.invoiceHash ?? sha256Hex(canonicalInvoiceText);
+  const evidenceHash = input.evidenceHash ?? sha256Hex(canonicalInvoiceText);
   const buyerHash = hashJson({ buyer_name: parsed.buyer_name, buyer_domain: parsed.buyer_domain ?? "" });
   const invoiceId = hashJson({ sellerWallet: input.sellerWallet, invoiceHash, nonce: parsed.invoice_number });
   const fxNormalizer = new FxNormalizer(input.fxProvider, 10 * 60 * 1000, () => now.getTime());

@@ -1,5 +1,9 @@
+import { XCircleIcon } from "lucide-react";
 import { buttonVariants } from "../../../components/ui/button";
+import { Card, CardDescription, CardHeader, CardTitle } from "../../../components/ui/card";
 import { cn } from "@/lib/utils";
+
+export const metadata = { title: "Checkout cancelled | Cortex" };
 
 export default async function CheckoutCancelPage({
   searchParams
@@ -10,15 +14,19 @@ export default async function CheckoutCancelPage({
   const retryHref = invoiceId ? `/buyer/pay/${invoiceId}` : "/";
 
   return (
-    <section className="mx-auto grid max-w-[640px] place-items-center content-center gap-4 text-center" style={{ minHeight: "58dvh" }}>
-      <div className="grid size-[76px] place-items-center rounded-full bg-bad text-[44px] font-extrabold text-[#160606] shadow-[0_0_80px_rgba(248,113,113,0.25)]">
-        ×
-      </div>
-      <h1 className="m-0 text-[clamp(34px,5vw,64px)] font-extrabold leading-[0.98] tracking-[-0.055em] text-ink">
-        Payment failed
-      </h1>
-      <p className="m-0 leading-relaxed text-ink-muted">Retry paying by visiting the invoice payment link again.</p>
-      <a href={retryHref} className={cn(buttonVariants())}>Retry paying</a>
-    </section>
+    <div className="min-h-dvh px-5 pb-24 pt-32 md:px-8 md:pt-36">
+      <Card className="mx-auto min-h-[62dvh] max-w-4xl items-center justify-center rounded-2xl border-white/10 bg-card/72 text-center">
+        <CardHeader className="items-center gap-6">
+          <div className="grid size-20 place-items-center rounded-full border border-white/10 bg-destructive/10 text-destructive">
+            <XCircleIcon />
+          </div>
+          <CardTitle className="text-4xl tracking-normal md:text-6xl">Checkout cancelled</CardTitle>
+          <CardDescription className="max-w-xl text-base leading-7">
+            No repayment was recorded. Retry from the invoice payment link when you are ready.
+          </CardDescription>
+          <a href={retryHref} className={cn(buttonVariants())}>Retry paying</a>
+        </CardHeader>
+      </Card>
+    </div>
   );
 }

@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { ArrowUpRightIcon } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Button } from "./ui/button";
+import { Spinner } from "./ui/spinner";
 
 export function CheckoutButton({ invoiceId }: { invoiceId: string }) {
   const [state, setState] = useState<"idle" | "loading" | "error">("idle");
@@ -28,13 +31,19 @@ export function CheckoutButton({ invoiceId }: { invoiceId: string }) {
   }
 
   return (
-    <div className="grid gap-3">
+    <div className="flex flex-col gap-4">
       <Button type="button" onClick={createHostedCheckout} disabled={state === "loading"} className="w-fit">
-        {state === "loading" ? "Creating hosted checkout..." : "Continue to hosted Dodo checkout"}
+        {state === "loading" ? <Spinner data-icon="inline-start" /> : <ArrowUpRightIcon data-icon="inline-start" />}
+        {state === "loading" ? "Creating checkout" : "Continue to hosted Dodo checkout"}
       </Button>
-      {state === "error" ? <p className="m-0 text-xs text-bad">{error}</p> : null}
-      <p className="m-0 text-xs leading-relaxed text-ink-muted">
-        You will leave Cortex for the hosted Dodo payment page. Cortex waits for the signed webhook before showing success.
+      {state === "error" ? (
+        <Alert variant="destructive">
+          <AlertTitle>Checkout failed</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
+      <p className="m-0 max-w-xl text-sm leading-6 text-muted-foreground">
+        You will leave Cortex for Dodo. When you return, Cortex still waits for the signed webhook before showing paid.
       </p>
     </div>
   );

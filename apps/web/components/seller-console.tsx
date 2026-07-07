@@ -1,11 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ArrowRightIcon, CircleDollarSignIcon, FileUpIcon, LinkIcon, WalletCardsIcon } from "lucide-react";
 import { formatUsd, type ReceivableView } from "../lib/finance";
 import { WalletGate, shortAccount, useCasperWallet } from "./casper-wallet";
 import { HostedPaymentLinkActions } from "./hosted-payment-link-actions";
+import { InvoiceLifecyclePanel } from "./invoice-lifecycle-panel";
+import { PageShell } from "./page-shell";
 import { StatusPill } from "./status-pill";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { Badge } from "./ui/badge";
 import { Button, buttonVariants } from "./ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./ui/card";
+import { Skeleton } from "./ui/skeleton";
 import { cn } from "@/lib/utils";
 
 export function SellerConsole() {
@@ -20,113 +27,225 @@ function ConnectedSellerConsole() {
   const wallet = useCasperWallet();
   const { invoices, state, error } = useInvoices("seller", wallet.accountHash);
   const faceValue = useMemo(() => invoices.reduce((sum, invoice) => sum + BigInt(invoice.usdAmountCents ?? "0"), 0n), [invoices]);
-  const advanced = useMemo(() => invoices.reduce((sum, invoice) => sum + BigInt(invoice.advanceAmountUsdCents ?? "0"), 0n), [invoices]);
+  const advanced = useMemo(
+    () =>
+      invoices
+        .filter((invoice) => invoice.statusCasper === "RepaymentPending" && !invoice.cashoutDeployHash)
+        .reduce((sum, invoice) => sum + BigInt(invoice.advanceAmountUsdCents ?? "0"), 0n),
+    [invoices]
+  );
+  const open = invoices.filter((invoice) => !["Settled", "Rejected", "Defaulted", "Cancelled"].includes(invoice.statusCasper)).length;
 
   return (
+    <PageShell
+      eyebrow={`Seller wallet ${shortAccount(wallet.accountHash)}`}
+      title="Freelancer receivable console"
+      description="Upload invoices, inspect agent output, list the receivable on Casper, and send a Dodo checkout link only after investor funding."
+      action={
+        <a href="/seller/upload" className={cn(buttonVariants({ size: "lg" }), "h-11 px-4")}>
+          <FileUpIcon data-icon="inline-start" />
+          Upload invoice
+        </a>
+      }
+    >
+      <section className="grid gap-4 md:grid-cols-3">
+        <MetricCard icon={WalletCardsIcon} label="Face value" value={formatUsd(faceValue.toString())} sub="Invoices owned by this wallet" />
+        <MetricCard icon={CircleDollarSignIcon} label="Advance available" value={formatUsd(advanced.toString())} sub="Unlocks after funding confirmation" active={advanced > 0n} />
+        <MetricCard icon={LinkIcon} label="Open workflows" value={String(open)} sub="Invoices still moving through the lifecycle" />
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <ActionPanel
+          title="Run underwriting"
+          body="Upload PDF, image, or text evidence and let the agent pipeline produce validated terms."
+          href="/seller/upload"
+          cta="Upload invoice"
+        />
+        <ActionPanel
+          title="Withdraw advance"
+          body="Cash out only after the invoice reaches RepaymentPending on Casper and the vault confirms funding."
+          onClick={() => document.getElementById("uploaded-invoices")?.scrollIntoView({ behavior: "smooth" })}
+          disabled={!invoices.some((invoice) => invoice.statusCasper === "RepaymentPending" && !invoice.cashoutDeployHash)}
+          cta="Review funded invoices"
+        />
+        <ActionPanel
+          title="Send Dodo link"
+          body="Generate hosted checkout links from repayment-pending invoices. Redirects never mark invoices paid."
+          onClick={() => document.getElementById("uploaded-invoices")?.scrollIntoView({ behavior: "smooth" })}
+          disabled={!invoices.some((invoice) => invoice.statusCasper === "RepaymentPending")}
+          cta="Open payment links"
+        />
+      </section>
+
+      <section id="uploaded-invoices" className="scroll-mt-28">
+        <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="m-0 text-2xl font-semibold tracking-normal text-foreground">Uploaded invoices</h2>
+            <p className="m-0 mt-2 text-sm text-muted-foreground">Rows expand into Casper lifecycle and Dodo payment actions when relevant.</p>
+          </div>
+          <Badge variant="secondary">{invoices.length} total</Badge>
+        </div>
+
+        {state === "loading" ? <InvoiceSkeleton /> : null}
+        {state === "error" ? (
+          <Alert variant="destructive">
+            <AlertTitle>Could not load invoices</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+        {state === "ready" && invoices.length === 0 ? (
+          <EmptyState
+            title="No invoices yet"
+            body="Upload a real invoice from this connected Casper account to begin the demo path."
+            action={<a href="/seller/upload" className={cn(buttonVariants({ size: "sm" }))}>Upload invoice</a>}
+          />
+        ) : null}
+
+        {invoices.length > 0 ? (
+          <div className="grid gap-3">
+            {invoices.map((invoice) => (
+              <article
+                key={invoice.id}
+                className="group overflow-hidden rounded-2xl border border-white/10 bg-card/72 transition-colors hover:bg-card"
+              >
+                <a
+                  href={`/invoice/${invoice.id}`}
+                  className="grid gap-4 p-4 text-inherit md:grid-cols-[1.35fr_0.75fr_0.75fr_0.7fr_auto] md:items-center"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-base font-semibold text-foreground">{invoice.title ?? invoice.id}</div>
+                    <div className="mt-1 text-sm text-muted-foreground">Due {invoice.dueDate ?? "not set"}</div>
+                  </div>
+                  <NumberCell label="Face" value={formatUsd(invoice.usdAmountCents ?? invoice.repaymentAmountUsdCents)} />
+                  <NumberCell label="Advance" value={formatUsd(invoice.advanceAmountUsdCents ?? "0")} />
+                  <StatusPill status={invoice.statusCasper} />
+                  <span className={cn(buttonVariants({ variant: "outline", size: "sm" }), "w-fit")}>
+                    Review
+                    <ArrowRightIcon data-icon="inline-end" />
+                  </span>
+                </a>
+                {invoice.statusCasper === "RepaymentPending" ? (
+                  <div className="border-t border-white/10 p-4">
+                    <HostedPaymentLinkActions invoiceId={invoice.id} />
+                  </div>
+                ) : null}
+                {(invoice.statusCasper === "Scored" || invoice.statusCasper === "RepaymentPending" || invoice.statusCasper === "Repaid") ? (
+                  <div className="border-t border-white/10 p-4">
+                    <InvoiceLifecyclePanel invoice={invoice} compact />
+                  </div>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        ) : null}
+      </section>
+    </PageShell>
+  );
+}
+
+function MetricCard({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  active
+}: {
+  icon: typeof WalletCardsIcon;
+  label: string;
+  value: string;
+  sub: string;
+  active?: boolean;
+}) {
+  return (
+    <Card className={cn("rounded-2xl border-white/10 bg-card/72", active && "bg-primary text-primary-foreground")}>
+      <CardHeader>
+        <div className={cn("mb-4 grid size-10 place-items-center rounded-full border border-white/10 bg-white/[0.035]", active && "bg-primary-foreground/12")}>
+          <Icon />
+        </div>
+        <CardDescription className={active ? "text-primary-foreground/70" : undefined}>{label}</CardDescription>
+        <CardTitle className="text-4xl tracking-normal tabular-nums">{value}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className={cn("m-0 text-sm leading-6 text-muted-foreground", active && "text-primary-foreground/72")}>{sub}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ActionPanel({
+  title,
+  body,
+  cta,
+  href,
+  onClick,
+  disabled
+}: {
+  title: string;
+  body: string;
+  cta: string;
+  href?: string;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
+  const content = (
     <>
-      <div className="mb-3.5 flex items-center justify-between gap-3">
-        <h2 className="m-0 text-lg font-bold tracking-tight text-ink">Freelancer workspace</h2>
-        <a href="/seller/upload" className={cn(buttonVariants({ size: "sm" }))}>Upload invoice</a>
-      </div>
-
-      <section className="mb-10 grid grid-cols-3 gap-3 max-sm:grid-cols-1">
-        <MetricCard label="Connected wallet" value={shortAccount(wallet.accountHash)} sub="Seller identity for uploads and receivable listing" compact />
-        <MetricCard label="Face value" value={formatUsd(faceValue.toString())} sub="Real invoices owned by this wallet" />
-        <MetricCard label="Advance available" value={formatUsd(advanced.toString())} sub="Unlocks after investor funding and Casper confirmation" good />
-      </section>
-
-      <div className="mb-3.5 flex items-center gap-3">
-        <h2 className="m-0 text-lg font-bold tracking-tight text-ink">Freelancer actions</h2>
-      </div>
-      <section className="mb-10 grid grid-cols-3 gap-3 max-sm:grid-cols-1">
-        <RoleCard label="Upload" title="Submit a new invoice" desc="Run parser, FX, verification, risk pricing, and prepare a receivable for Casper mint/list.">
-          <a href="/seller/upload" className={cn(buttonVariants({ size: "sm" }), "w-fit")}>Upload invoice</a>
-        </RoleCard>
-        <RoleCard label="Withdrawals" title="Advance withdrawal" desc="After investor funding, withdraw the advanced amount tied to this wallet.">
-          <Button variant="outline" size="sm" disabled>Awaiting funded invoices</Button>
-        </RoleCard>
-        <RoleCard label="Client reminders" title="Hosted Dodo links only" desc="Generate a hosted checkout URL from a repayment-pending invoice and send that link to the client." />
-      </section>
-
-      <div className="mb-3.5 flex items-center gap-3">
-        <h2 className="m-0 text-lg font-bold tracking-tight text-ink">Uploaded invoices</h2>
-      </div>
-
-      {state === "loading" ? (
-        <EmptyState><p className="text-ink">Loading invoices...</p></EmptyState>
-      ) : null}
-      {state === "error" ? (
-        <EmptyState>
-          <p className="text-ink">Could not load invoices</p>
-          <p className="m-0 text-xs text-bad">{error}</p>
-        </EmptyState>
-      ) : null}
-      {state === "ready" && invoices.length === 0 ? (
-        <EmptyState>
-          <p className="text-lg font-bold tracking-tight text-ink">No invoices yet.</p>
-          <p className="m-0 text-xs leading-relaxed text-ink-muted">Clean slate. Upload a real invoice from this connected Casper account to begin.</p>
-          <a href="/seller/upload" className={cn(buttonVariants({ size: "sm" }), "w-fit")}>Upload invoice</a>
-        </EmptyState>
-      ) : null}
-
-      {invoices.length > 0 ? (
-        <section className="grid gap-1.5">
-          {invoices.map((invoice) => (
-            <article
-              key={invoice.id}
-              className="grid grid-cols-[1.4fr_0.8fr_0.8fr_0.9fr_60px] items-center gap-3.5 rounded-[10px] border border-line bg-panel px-4 py-3.5 transition-colors hover:border-ink-muted-2 hover:bg-panel-elevated max-sm:grid-cols-1"
-            >
-              <div>
-                <strong className="text-ink">{invoice.title ?? invoice.id}</strong>
-                <br />
-                <span className="text-xs text-ink-muted">Due {invoice.dueDate ?? "not set"}</span>
-              </div>
-              <div className="font-semibold tabular-nums text-ink">{formatUsd(invoice.usdAmountCents ?? invoice.repaymentAmountUsdCents)}</div>
-              <div className="font-semibold tabular-nums text-ink">{formatUsd(invoice.advanceAmountUsdCents ?? "0")}</div>
-              <div><StatusPill status={invoice.statusCasper} /></div>
-              <div>
-                <a href={`/invoice/${invoice.id}`} className={cn(buttonVariants({ variant: "outline", size: "xs" }))}>Review</a>
-              </div>
-              {invoice.statusCasper === "RepaymentPending" ? (
-                <div className="col-span-full border-t border-line-subtle pt-3.5">
-                  <HostedPaymentLinkActions invoiceId={invoice.id} />
-                </div>
-              ) : null}
-            </article>
-          ))}
-        </section>
-      ) : null}
+      {cta}
+      <ArrowRightIcon data-icon="inline-end" />
     </>
   );
+
+  return (
+    <Card className="rounded-2xl border-white/10 bg-background/54">
+      <CardHeader>
+        <CardTitle className="text-2xl tracking-normal">{title}</CardTitle>
+        <CardDescription className="leading-6">{body}</CardDescription>
+      </CardHeader>
+      <CardFooter>
+        {href ? (
+          <a href={href} className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>{content}</a>
+        ) : (
+          <Button variant="outline" size="sm" type="button" onClick={onClick} disabled={disabled}>
+            {content}
+          </Button>
+        )}
+      </CardFooter>
+    </Card>
+  );
 }
 
-function MetricCard({ label, value, sub, good, compact }: { label: string; value: string; sub: string; good?: boolean; compact?: boolean }) {
+function NumberCell({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-[10px] border border-line bg-panel px-6 py-[22px]">
-      <div className="text-[11px] font-medium uppercase tracking-widest text-ink-muted">{label}</div>
-      <div className={`font-extrabold tracking-[-0.03em] tabular-nums ${compact ? "break-all text-lg" : "text-[26px]"} ${good ? "text-good" : "text-ink"}`}>
-        {value}
-      </div>
-      <div className="mt-0.5 text-xs text-ink-muted-2">{sub}</div>
+    <div className="min-w-0">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="truncate font-semibold tabular-nums text-foreground">{value}</div>
     </div>
   );
 }
 
-function RoleCard({ label, title, desc, children }: { label: string; title: string; desc: string; children?: React.ReactNode }) {
+function InvoiceSkeleton() {
   return (
-    <div className="grid gap-2.5 rounded-[10px] border border-line bg-[rgba(17,17,22,0.72)] p-5 transition-all hover:-translate-y-0.5 hover:border-[rgba(183,255,90,0.36)] hover:bg-[rgba(24,24,28,0.92)]">
-      <span className="text-[11px] font-medium uppercase tracking-widest text-ink-muted">{label}</span>
-      <h3 className="m-0 text-lg font-bold tracking-[-0.02em] text-ink">{title}</h3>
-      <p className="m-0 text-[13px] leading-[1.55] text-ink-muted">{desc}</p>
-      {children}
+    <div className="grid gap-3">
+      {[0, 1, 2].map((item) => (
+        <div key={item} className="rounded-2xl border border-white/10 bg-card/72 p-4">
+          <div className="grid gap-4 md:grid-cols-[1.35fr_0.75fr_0.75fr_0.7fr_auto] md:items-center">
+            <Skeleton className="h-12" />
+            <Skeleton className="h-10" />
+            <Skeleton className="h-10" />
+            <Skeleton className="h-7" />
+            <Skeleton className="h-8 w-24" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
 
-function EmptyState({ children }: { children: React.ReactNode }) {
+function EmptyState({ title, body, action }: { title: string; body: string; action?: React.ReactNode }) {
   return (
-    <section className="grid gap-4 rounded-[10px] border border-line bg-gradient-to-b from-[rgba(24,24,28,0.96)] to-[rgba(17,17,22,0.96)] p-[22px]">
-      {children}
+    <section className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-card/72 p-6">
+      <h3 className="m-0 text-2xl font-semibold tracking-normal text-foreground">{title}</h3>
+      <p className="m-0 max-w-2xl text-sm leading-6 text-muted-foreground">{body}</p>
+      {action ? <div>{action}</div> : null}
     </section>
   );
 }
