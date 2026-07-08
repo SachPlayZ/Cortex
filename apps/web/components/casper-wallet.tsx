@@ -244,6 +244,24 @@ export function ConnectWalletButton({ role, compact = false }: { role?: WalletRo
     }
   }
 
+  function mockConnect() {
+    const mockRole = role ?? "seller";
+    // Standard mock key pair details matching active roles on-chain
+    const mockPublicKey = mockRole === "seller"
+      ? "015c9d469584ba208d132d0f507ba14afa73bc5bba0bdfc8ea5bf900fa7b63f25b"
+      : "01062f47bfdb3641d8a2ba125942db1fced3855999c14f12eb50e2a5e093eedb4";
+    const mockAccountHash = mockRole === "seller"
+      ? "account-hash-55c3c0a2df3bb64121ac8d159fd09aae1115844710c843c84f98e3503fbd4d81"
+      : "account-hash-ea854a68785a1cdcc8d159fd09aae1115844710c843c84f98e3503fbd4d816b";
+
+    localStorage.setItem("cortex.casperWallet", JSON.stringify({
+      publicKeyHex: mockPublicKey,
+      accountHash: mockAccountHash
+    }));
+    localStorage.setItem("cortex.walletRole", mockRole);
+    window.location.reload();
+  }
+
   if (wallet.isConnected) {
     return (
       <div className={`flex flex-wrap items-center gap-2 ${compact ? "" : "mt-2"}`}>
@@ -267,6 +285,9 @@ export function ConnectWalletButton({ role, compact = false }: { role?: WalletRo
     <div className={`flex flex-wrap items-center gap-2 ${compact ? "" : "mt-2"}`}>
       <Button onClick={connect} size="sm">
         {wallet.isSdkReady ? "Connect with CSPR.click" : "Loading CSPR.click..."}
+      </Button>
+      <Button onClick={mockConnect} variant="outline" size="sm">
+        Mock connection (Dev)
       </Button>
       {error ? <span className="max-w-[280px] text-xs text-bad">{error}</span> : null}
     </div>
