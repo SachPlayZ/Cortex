@@ -15,6 +15,7 @@ type CsprClickAccount = {
 };
 
 type CsprClickEvent = {
+  account?: CsprClickAccount;
   detail?: {
     account?: CsprClickAccount;
   };
@@ -111,7 +112,11 @@ export function CasperWalletProvider({ children }: { children: ReactNode }) {
     let activeSdk: CsprClickSDK | undefined;
 
     async function syncActiveAccount(event?: CsprClickEvent) {
-      const account = (await window.csprclick?.getActiveAccount?.()) ?? event?.detail?.account ?? null;
+      const account =
+        (await window.csprclick?.getActiveAccount?.()) ??
+        event?.account ??
+        event?.detail?.account ??
+        null;
       const identity = readWalletIdentity(account);
       if (identity.publicKeyHex && identity.accountHash) {
         persistAccount(identity, undefined);
