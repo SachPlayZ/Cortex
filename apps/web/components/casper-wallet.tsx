@@ -112,7 +112,13 @@ export function CasperWalletProvider({ children }: { children: ReactNode }) {
 
     async function syncActiveAccount(event?: CsprClickEvent) {
       const account = (await window.csprclick?.getActiveAccount?.()) ?? event?.detail?.account ?? null;
-      persistAccount(readWalletIdentity(account), undefined);
+      const identity = readWalletIdentity(account);
+      if (identity.publicKeyHex && identity.accountHash) {
+        persistAccount(identity, undefined);
+      } else if (event) {
+        // Only clear the session if we explicitly received an event indicating sign out or account switch to null.
+        persistAccount({ publicKeyHex: "", accountHash: "" }, null);
+      }
     }
 
     function clearActiveAccount() {
