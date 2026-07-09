@@ -31,8 +31,9 @@ type CsprClickSDK = {
   off: (eventName: string, handler: (event: CsprClickEvent) => void | Promise<void>) => void;
   send?: (
     transactionJson: unknown,
-    options?: { signingPublicKey?: string; onStatusUpdate?: (status: unknown) => void }
-  ) => Promise<string | { transactionHash?: string; hash?: string }>;
+    signingPublicKey: string,
+    onStatusUpdate?: (status: string, data: unknown) => void
+  ) => Promise<string | { transactionHash?: string; hash?: string } | undefined>;
 };
 
 type WalletRole = "seller" | "investor";
@@ -137,6 +138,7 @@ export function CasperWalletProvider({ children }: { children: ReactNode }) {
       setSdkError("");
       activeSdk.on("csprclick:signed_in", syncActiveAccount);
       activeSdk.on("csprclick:switched_account", syncActiveAccount);
+      activeSdk.on("csprclick:unsolicited_account_change", syncActiveAccount);
       activeSdk.on("csprclick:signed_out", clearActiveAccount);
       activeSdk.on("csprclick:disconnected", clearActiveAccount);
       void syncActiveAccount();
@@ -173,6 +175,7 @@ export function CasperWalletProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("csprclick:loaded", handleLoaded);
       activeSdk?.off("csprclick:signed_in", syncActiveAccount);
       activeSdk?.off("csprclick:switched_account", syncActiveAccount);
+      activeSdk?.off("csprclick:unsolicited_account_change", syncActiveAccount);
       activeSdk?.off("csprclick:signed_out", clearActiveAccount);
       activeSdk?.off("csprclick:disconnected", clearActiveAccount);
     };
@@ -201,10 +204,12 @@ export function CasperWalletProvider({ children }: { children: ReactNode }) {
       if (!sdk?.send || !publicKeyHex || !accountHash) {
         throw new Error("Connect CSPR.click before signing Casper transactions.");
       }
-      const result = await sdk.send(transactionJson, {
-        signingPublicKey: publicKeyHex.toLowerCase(),
-        ...(onStatusUpdate ? { onStatusUpdate } : {})
-      });
+      const result = await sdk.send(
+        transactionJson,
+        publicKeyHex.toLowerCase(),
+        onStatusUpdate ? (status, data) => onStatusUpdate({ status, data }) : undefined
+      );
+      if (!result) return "";
       if (typeof result === "string") return result;
       return result.transactionHash ?? result.hash ?? "";
     },
