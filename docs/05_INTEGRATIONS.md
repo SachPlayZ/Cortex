@@ -46,6 +46,8 @@ SETTLEMENT_RELAYER_PRIVATE_KEY_PATH=
 
 ### Transaction Types
 
+For the deployed Testnet MVP, every financial lifecycle entry point below targets the `InvoiceRegistry` package. Standalone vault/escrow packages are not used to derive canonical invoice status.
+
 Seller/user signed via CSPR.click:
 
 ```txt

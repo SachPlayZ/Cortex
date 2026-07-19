@@ -3,11 +3,10 @@
 import { useState } from "react";
 import { CopyIcon, MailIcon, SendIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
-import { Button, buttonVariants } from "./ui/button";
+import { Button } from "./ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "./ui/field";
 import { Input } from "./ui/input";
 import { Spinner } from "./ui/spinner";
-import { cn } from "@/lib/utils";
 
 export function HostedPaymentLinkActions({ invoiceId }: { invoiceId: string }) {
   const [checkoutUrl, setCheckoutUrl] = useState("");
@@ -65,7 +64,7 @@ export function HostedPaymentLinkActions({ invoiceId }: { invoiceId: string }) {
       </FieldGroup>
 
       {checkoutUrl ? (
-        <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.035] p-3">
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/50 p-3">
           <p className="m-0 break-all font-mono text-xs text-muted-foreground">{checkoutUrl}</p>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" type="button" onClick={() => void navigator.clipboard.writeText(checkoutUrl)}>
@@ -73,10 +72,10 @@ export function HostedPaymentLinkActions({ invoiceId }: { invoiceId: string }) {
               Copy link
             </Button>
             {clientEmail ? (
-              <a href={reminderHref} className={cn(buttonVariants({ size: "sm" }))}>
+              <Button size="sm" nativeButton={false} render={<a href={reminderHref} />}>
                 <MailIcon data-icon="inline-start" />
                 Email link
-              </a>
+              </Button>
             ) : null}
           </div>
         </div>

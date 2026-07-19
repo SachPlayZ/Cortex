@@ -226,13 +226,20 @@ export async function handleDodoWebhook(params: {
     return { outcome: "rejected", reason: "invalid_signature" };
   }
 
-  const normalized = normalizeDodoPaymentEvent(payload, params.now?.() ?? new Date());
+  const normalized = normalizeDodoPaymentEvent(
+    payload,
+    params.headers["webhook-id"],
+    params.now?.() ?? new Date()
+  );
+  if (normalized.event_type !== SUCCESSFUL_DODO_EVENT_TYPE) {
+    return { outcome: "rejected", reason: "not_successful_payment" };
+  }
   const parsed = DodoWebhookEventSchema.safeParse(normalized);
   if (!parsed.success) {
     return { outcome: "rejected", reason: "invalid_payload" };
   }
   const event = parsed.data;
-  if (event.event_type !== SUCCESSFUL_DODO_EVENT_TYPE || event.status.toLowerCase() !== "succeeded") {
+  if (event.status.toLowerCase() !== "succeeded") {
     return { outcome: "rejected", reason: "not_successful_payment" };
   }
 
@@ -257,8 +264,8 @@ export async function handleDodoWebhook(params: {
   if (event.metadata.expected_amount_usd_cents !== invoice.repaymentAmountUsdCents) {
     return { outcome: "rejected", reason: "metadata_amount_mismatch" };
   }
-  if (event.amount_usd_cents !== event.metadata.expected_amount_usd_cents) {
-    return { outcome: "rejected", reason: "paid_amount_metadata_mismatch" };
+  if (!invoice.dodoNonce || event.metadata.nonce !== invoice.dodoNonce) {
+    return { outcome: "rejected", reason: "checkout_nonce_mismatch" };
   }
   if (BigInt(event.amount_usd_cents) < BigInt(invoice.repaymentAmountUsdCents)) {
     return { outcome: "rejected", reason: "underpayment" };
@@ -326,12 +333,12 @@ export function handleCheckoutReturn(): { repaymentStatus: "pending_webhook"; me
   };
 }
 
-function normalizeDodoPaymentEvent(payload: unknown, receivedAt: Date): JsonRecord {
+function normalizeDodoPaymentEvent(payload: unknown, webhookId: string | undefined, receivedAt: Date): JsonRecord {
   const root = asRecord(payload);
   const data = asRecord(root.data);
   const object = asRecord(data.object);
   const payment = Object.keys(object).length > 0 ? object : data;
-  const eventId = readString(root.id) ?? readString(root.event_id) ?? readString(root.eventId);
+  const eventId = readString(root.id) ?? readString(root.event_id) ?? readString(root.eventId) ?? readString(webhookId);
   const eventType = readString(root.type) ?? readString(root.event_type) ?? readString(root.eventType);
   const paymentId = readString(payment.payment_id) ?? readString(payment.paymentId) ?? readString(payment.id);
   const status = readString(payment.status) ?? (eventType === SUCCESSFUL_DODO_EVENT_TYPE ? "succeeded" : undefined);

@@ -7,14 +7,13 @@ import { InvoiceLifecyclePanel } from "./invoice-lifecycle-panel";
 import { PageShell } from "./page-shell";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
-import { Button, buttonVariants } from "./ui/button";
+import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./ui/card";
 import { Field, FieldDescription, FieldGroup, FieldLabel, FieldSet, FieldLegend } from "./ui/field";
 import { Input } from "./ui/input";
 import { Progress, ProgressLabel } from "./ui/progress";
 import { Spinner } from "./ui/spinner";
 import { Textarea } from "./ui/textarea";
-import { cn } from "@/lib/utils";
 
 type UnderwriteResponse = {
   invoiceId: string;
@@ -89,6 +88,7 @@ function ConnectedSellerUploadFlow() {
     form.set("file", uploadFile);
     form.set("sellerWallet", wallet.accountHash);
     form.set("sellerPublicKey", wallet.publicKeyHex);
+    if (invoiceText.trim()) form.set("invoiceTextFallback", invoiceText.trim());
     if (clientEmail) form.set("buyerEmail", clientEmail);
 
     try {
@@ -112,9 +112,9 @@ function ConnectedSellerUploadFlow() {
       description="The upload flow shows every proof point: invoice hash, parser output, FX normalization, verification checks, risk terms, and the Casper mint/list handoff."
     >
       <section className="grid gap-6 lg:grid-cols-[0.92fr_1.08fr]">
-        <Card className="rounded-2xl border-white/10 bg-card/72">
+        <Card>
           <CardHeader>
-            <div className="mb-3 grid size-11 place-items-center rounded-full border border-white/10 bg-primary/10 text-primary">
+            <div className="mb-3 grid size-11 place-items-center rounded-lg bg-muted text-primary">
               <FileTextIcon />
             </div>
             <CardTitle className="text-3xl tracking-normal">Invoice evidence</CardTitle>
@@ -171,9 +171,9 @@ function ConnectedSellerUploadFlow() {
           </CardFooter>
         </Card>
 
-        <Card className="rounded-2xl border-white/10 bg-background/54">
+        <Card>
           <CardHeader>
-            <div className="mb-3 grid size-11 place-items-center rounded-full border border-white/10 bg-primary/10 text-primary">
+            <div className="mb-3 grid size-11 place-items-center rounded-lg bg-muted text-primary">
               <ShieldCheckIcon />
             </div>
             <CardTitle className="text-3xl tracking-normal">Agent pipeline</CardTitle>
@@ -188,11 +188,9 @@ function ConnectedSellerUploadFlow() {
               {stages.map((stage, index) => {
                 const complete = state === "ready" || (state === "underwriting" && index < 4);
                 return (
-                  <div key={stage} className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.035] px-4 py-3">
+                  <div key={stage} className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/50 px-4 py-3">
                     <div className="flex min-w-0 items-center gap-3">
-                      <span className={cn("grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold", complete ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
-                        {index + 1}
-                      </span>
+                      <Badge variant={complete ? "default" : "outline"}>{index + 1}</Badge>
                       <span className="truncate text-sm text-foreground">{stage}</span>
                     </div>
                     <Badge variant={complete ? "default" : "outline"}>{complete ? "done" : "pending"}</Badge>
@@ -220,7 +218,7 @@ function ConnectedSellerUploadFlow() {
 
       {result ? (
         <section className="grid gap-6">
-          <Card className="rounded-2xl border-white/10 bg-card/72">
+          <Card>
             <CardHeader className="md:grid-cols-[1fr_auto]">
               <div>
                 <Badge variant={result.status === "ready_to_mint" ? "default" : "secondary"}>{result.status}</Badge>
@@ -232,11 +230,11 @@ function ConnectedSellerUploadFlow() {
                 </CardDescription>
               </div>
               <div className="flex flex-wrap gap-3">
-                <a href={`/invoice/${result.invoiceId}`} className={cn(buttonVariants({ size: "sm" }))}>
+                <Button size="sm" nativeButton={false} render={<a href={`/invoice/${result.invoiceId}`} />}>
                   Review receivable
                   <ArrowRightIcon data-icon="inline-end" />
-                </a>
-                <a href="/seller" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>Dashboard</a>
+                </Button>
+                <Button variant="outline" size="sm" nativeButton={false} render={<a href="/seller" />}>Dashboard</Button>
               </div>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-4">
@@ -281,7 +279,7 @@ function ConnectedSellerUploadFlow() {
 
 function ResultItem({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="grid min-w-0 gap-2 rounded-xl border border-white/10 bg-white/[0.035] p-4">
+    <div className="grid min-w-0 gap-2 rounded-lg border border-border bg-muted/50 p-4">
       <span className="text-xs text-muted-foreground">{label}</span>
       <strong className={mono ? "break-all font-mono text-xs text-muted-foreground" : "truncate font-semibold text-foreground"}>
         {value}

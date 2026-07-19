@@ -34,7 +34,8 @@ function createStore() {
     id: "inv_1",
     invoiceHash: sha256Hex("invoice"),
     repaymentAmountUsdCents: "125000",
-    statusCasper: "RepaymentPending"
+    statusCasper: "RepaymentPending",
+    dodoNonce: "nonce_nonce_nonce_1"
   });
   return store;
 }
@@ -154,6 +155,49 @@ describe("Dodo repayment integration", () => {
     expect(result.webhook.casperDeployHash).toBe("casper-deploy-0001");
   });
 
+  it("uses the Standard Webhooks event id header when Dodo omits an id in the body", async () => {
+    const store = createStore();
+    const payload = successfulPayload();
+    delete (payload as { id?: string }).id;
+    const signed = signPayload(payload);
+    signed.headers["webhook-id"] = "evt_from_header";
+    signed.headers["webhook-signature"] = new Webhook(secret, { format: "raw" }).sign(
+      "evt_from_header",
+      now,
+      signed.rawBody
+    );
+
+    const result = await handleDodoWebhook({
+      rawBody: signed.rawBody,
+      headers: signed.headers,
+      webhookSecret: secret,
+      secretFormat: "raw",
+      store,
+      casper: new MemoryCasperSettlementClient(store),
+      now: () => now
+    });
+
+    expect(result.outcome).toBe("accepted");
+    if (result.outcome !== "accepted") throw new Error("Expected accepted");
+    expect(result.webhook.eventId).toBe("evt_from_header");
+  });
+
+  it("accepts overpayment when immutable expected amount still matches the invoice", async () => {
+    const store = createStore();
+    const signed = signPayload(successfulPayload({ total_amount: "130000" }));
+    const result = await handleDodoWebhook({
+      rawBody: signed.rawBody,
+      headers: signed.headers,
+      webhookSecret: secret,
+      secretFormat: "raw",
+      store,
+      casper: new MemoryCasperSettlementClient(store),
+      now: () => now
+    });
+
+    expect(result.outcome).toBe("accepted");
+  });
+
   it("rejects invalid signatures before parsing", async () => {
     const store = createStore();
     const signed = signPayload(successfulPayload());
@@ -168,6 +212,21 @@ describe("Dodo repayment integration", () => {
     });
 
     expect(result).toEqual({ outcome: "rejected", reason: "invalid_signature" });
+  });
+
+  it("acknowledges verified non-success events without requiring payment fields", async () => {
+    const store = createStore();
+    const signed = signPayload({ id: "evt_failed", type: "payment.failed", data: { payment_id: "pay_failed" } });
+    const result = await handleDodoWebhook({
+      rawBody: signed.rawBody,
+      headers: signed.headers,
+      webhookSecret: secret,
+      secretFormat: "raw",
+      store,
+      casper: new MemoryCasperSettlementClient(store),
+      now: () => now
+    });
+    expect(result).toEqual({ outcome: "rejected", reason: "not_successful_payment" });
   });
 
   it("ignores replayed webhook safely", async () => {
@@ -198,19 +257,33 @@ describe("Dodo repayment integration", () => {
     expect((await store.getRelayerJobByGatewayHash(sha256Hex("pay_1")))?.attempts).toBe(1);
   });
 
+  it("claims concurrent webhook settlement once", async () => {
+    const store = createStore();
+    let submissions = 0;
+    const memory = new MemoryCasperSettlementClient(store);
+    const casper: CasperSettlementClient = {
+      getInvoice: (invoiceId) => memory.getInvoice(invoiceId),
+      async recordGatewayRepayment(input) {
+        submissions += 1;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return memory.recordGatewayRepayment(input);
+      }
+    };
+    const signed = signPayload(successfulPayload());
+    await Promise.all([
+      handleDodoWebhook({ rawBody: signed.rawBody, headers: signed.headers, webhookSecret: secret, secretFormat: "raw", store, casper, now: () => now }),
+      handleDodoWebhook({ rawBody: signed.rawBody, headers: signed.headers, webhookSecret: secret, secretFormat: "raw", store, casper, now: () => now })
+    ]);
+    expect(submissions).toBe(1);
+    expect((await store.getRelayerJobByGatewayHash(sha256Hex("pay_1")))?.attempts).toBe(1);
+  });
+
   it("rejects underpayment webhook", async () => {
     const store = createStore();
     const signed = signPayload(
       successfulPayload({
         total_amount: "100000",
-        metadata: {
-          invoice_id: "inv_1",
-          invoice_hash: sha256Hex("invoice"),
-          expected_amount_usd_cents: "100000",
-          nonce: "nonce_nonce_nonce_1",
-          environment: "test_mode",
-          purpose: "cortex_invoice_repayment"
-        }
+        metadata: successfulPayload().data.metadata
       })
     );
     const result = await handleDodoWebhook({
@@ -223,7 +296,7 @@ describe("Dodo repayment integration", () => {
       now: () => now
     });
 
-    expect(result).toEqual({ outcome: "rejected", reason: "metadata_amount_mismatch" });
+    expect(result).toEqual({ outcome: "rejected", reason: "underpayment" });
   });
 
   it("rejects wrong invoice metadata", async () => {

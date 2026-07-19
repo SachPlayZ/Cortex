@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ArrowRightIcon, CheckCircle2Icon, XCircleIcon } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
-import { buttonVariants } from "./ui/button";
+import { Button } from "./ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Progress, ProgressLabel } from "./ui/progress";
 import { Spinner } from "./ui/spinner";
@@ -25,24 +25,27 @@ export function PaymentReturnStatus({ invoiceId }: { invoiceId: string }) {
     let cancelled = false;
 
     async function poll() {
+      let completed = false;
       try {
         const response = await fetch(`/api/payments/status/${invoiceId}`, { cache: "no-store" });
         const body = (await response.json()) as PaymentStatus | { error?: string };
         if (!response.ok) throw new Error("error" in body ? body.error : "Payment status unavailable");
         if (!cancelled) {
-          setStatus(body as PaymentStatus);
+          const next = body as PaymentStatus;
+          setStatus(next);
           setError("");
+          completed = next.payment_status === "succeeded";
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : "Payment status unavailable");
+      } finally {
+        if (!cancelled && !completed) window.setTimeout(() => void poll(), 3_000);
       }
     }
 
     void poll();
-    const interval = window.setInterval(() => void poll(), 3_000);
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
     };
   }, [invoiceId]);
 
@@ -50,12 +53,12 @@ export function PaymentReturnStatus({ invoiceId }: { invoiceId: string }) {
     return (
       <PaymentResultLayout>
         <ResultIcon tone="bad" />
-        <CardTitle className="text-4xl tracking-normal md:text-6xl">Payment status unavailable</CardTitle>
+        <CardTitle className="text-3xl md:text-4xl">Payment status unavailable</CardTitle>
         <CardDescription className="max-w-xl text-base leading-7">{error}</CardDescription>
-        <a href={`/buyer/pay/${invoiceId}`} className={cn(buttonVariants())}>
-          Retry paying
+        <Button nativeButton={false} render={<a href={`/buyer/pay/${invoiceId}`} />}>
+          Review invoice
           <ArrowRightIcon data-icon="inline-end" />
-        </a>
+        </Button>
       </PaymentResultLayout>
     );
   }
@@ -64,7 +67,7 @@ export function PaymentReturnStatus({ invoiceId }: { invoiceId: string }) {
     return (
       <PaymentResultLayout>
         <ResultIcon tone="good" />
-        <CardTitle className="text-4xl tracking-normal md:text-6xl">Webhook verified. Casper updated.</CardTitle>
+        <CardTitle className="text-3xl md:text-4xl">Webhook verified. Casper updated.</CardTitle>
         <CardDescription className="max-w-xl text-base leading-7">
           Cortex has received webhook-confirmed payment settlement. The investor can continue to claim when their wallet is connected.
         </CardDescription>
@@ -80,10 +83,10 @@ export function PaymentReturnStatus({ invoiceId }: { invoiceId: string }) {
 
   return (
     <PaymentResultLayout>
-      <div className="grid size-20 place-items-center rounded-full border border-white/10 bg-primary/10 text-primary">
+      <div className="grid size-16 place-items-center rounded-lg bg-muted text-primary">
         <Spinner />
       </div>
-      <CardTitle className="text-4xl tracking-normal md:text-6xl">Waiting for verified settlement</CardTitle>
+      <CardTitle className="text-3xl md:text-4xl">Waiting for verified settlement</CardTitle>
       <CardDescription className="max-w-xl text-base leading-7">
         Dodo returned you to Cortex. The invoice stays pending until the signed webhook is verified and the settlement
         relayer records repayment on Casper.
@@ -104,7 +107,7 @@ export function PaymentReturnStatus({ invoiceId }: { invoiceId: string }) {
 function PaymentResultLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh px-5 pb-24 pt-32 md:px-8 md:pt-36">
-      <Card className="mx-auto min-h-[62dvh] max-w-4xl items-center justify-center rounded-2xl border-white/10 bg-card/72 text-center">
+      <Card className="mx-auto min-h-[62dvh] max-w-3xl items-center justify-center text-center">
         <CardHeader className="items-center gap-6">
           {children}
         </CardHeader>
@@ -116,7 +119,7 @@ function PaymentResultLayout({ children }: { children: React.ReactNode }) {
 function ResultIcon({ tone }: { tone: "good" | "bad" }) {
   const Icon = tone === "good" ? CheckCircle2Icon : XCircleIcon;
   return (
-    <div className={cn("grid size-20 place-items-center rounded-full border border-white/10", tone === "good" ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive")}>
+    <div className={cn("grid size-16 place-items-center rounded-lg bg-muted", tone === "good" ? "text-primary" : "text-destructive")}>
       <Icon />
     </div>
   );

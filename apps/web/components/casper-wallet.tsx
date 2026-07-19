@@ -2,7 +2,10 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { LockKeyholeIcon, WalletIcon } from "lucide-react";
-import { Button, buttonVariants } from "./ui/button";
+import { readStoredWalletIdentity, readWalletIdentity, resolveCsprClickTransactionHash, type StoredWalletIdentity } from "../lib/casper-wallet-identity";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Skeleton } from "./ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -10,8 +13,6 @@ import { cn } from "@/lib/utils";
 type CsprClickAccount = {
   public_key?: string;
   publicKey?: string;
-  account_hash?: string;
-  accountHash?: string;
 };
 
 type CsprClickEvent = {
@@ -33,15 +34,19 @@ type CsprClickSDK = {
     transactionJson: unknown,
     signingPublicKey: string,
     onStatusUpdate?: (status: string, data: unknown) => void
-  ) => Promise<string | { transactionHash?: string; hash?: string } | undefined>;
+  ) => Promise<
+    | {
+        cancelled?: boolean;
+        deployHash?: string | null;
+        transactionHash?: string | null;
+        error?: string | null;
+        errorData?: unknown;
+      }
+    | undefined
+  >;
 };
 
 type WalletRole = "seller" | "investor";
-
-type StoredWalletIdentity = {
-  publicKeyHex: string;
-  accountHash: string;
-};
 
 type CasperWalletState = {
   publicKeyHex: string;
@@ -63,7 +68,10 @@ const ROLE_KEY = "cortex.walletRole";
 const CSPRCLICK_SCRIPT_ID = "csprclick-client-runtime";
 const CSPRCLICK_UI_CONTAINER_ID = "csprclick-ui";
 const CSPRCLICK_SCRIPT_SRC =
-  process.env.NEXT_PUBLIC_CSPRCLICK_SCRIPT_SRC ?? "https://cdn.cspr.click/ui/v1.9.0/csprclick-client-1.9.0.js";
+  process.env.NEXT_PUBLIC_CSPRCLICK_SCRIPT_SRC ?? "https://cdn.cspr.click/ui/v1.12.0/csprclick-client-1.12.0.js";
+const CSPRCLICK_CHAIN_NAME = process.env.NEXT_PUBLIC_CASPER_CHAIN_NAME ?? "casper-test";
+const CSPRCLICK_NODE_RPC_URL =
+  process.env.NEXT_PUBLIC_CASPER_NODE_RPC_URL ?? "https://node.testnet.cspr.cloud/rpc";
 
 const CasperWalletContext = createContext<CasperWalletState | undefined>(undefined);
 
@@ -147,6 +155,8 @@ export function CasperWalletProvider({ children }: { children: ReactNode }) {
     window.clickSDKOptions = {
       appName: "Cortex",
       appId: process.env.NEXT_PUBLIC_CSPRCLICK_APP_ID ?? "csprclick-template",
+      chainName: CSPRCLICK_CHAIN_NAME,
+      casperNode: CSPRCLICK_NODE_RPC_URL,
       contentMode: "iframe",
       providers: ["casper-wallet", "ledger", "walletconnect", "metamask-snap"]
     };
@@ -209,9 +219,7 @@ export function CasperWalletProvider({ children }: { children: ReactNode }) {
         publicKeyHex.toLowerCase(),
         onStatusUpdate ? (status, data) => onStatusUpdate({ status, data }) : undefined
       );
-      if (!result) return "";
-      if (typeof result === "string") return result;
-      return result.transactionHash ?? result.hash ?? "";
+      return resolveCsprClickTransactionHash(result);
     },
     [accountHash, publicKeyHex]
   );
@@ -262,16 +270,9 @@ export function ConnectWalletButton({ role, compact = false }: { role?: WalletRo
 
   if (wallet.isConnected) {
     return (
-      <div className={`flex flex-wrap items-center gap-2 ${compact ? "" : "mt-2"}`}>
-        <span className="size-2 rounded-full bg-good shadow-[0_0_18px_rgba(74,222,128,0.7)]" />
-        <span className="rounded-full border border-line bg-[rgba(24,24,28,0.88)] px-2.5 py-1.5 text-xs font-semibold text-ink">
-          {shortAccount(wallet.accountHash)}
-        </span>
-        {wallet.role ? (
-          <span className="rounded-full border border-[rgba(183,255,90,0.22)] px-2 py-1 text-[11px] uppercase tracking-widest text-accent-2">
-            {wallet.role}
-          </span>
-        ) : null}
+      <div className={cn("flex flex-wrap items-center gap-2", !compact && "mt-2")}>
+        <Badge><WalletIcon data-icon="inline-start" />{shortAccount(wallet.accountHash)}</Badge>
+        {wallet.role ? <Badge variant="outline">{wallet.role}</Badge> : null}
         <Button variant="ghost" size="xs" onClick={wallet.disconnect}>
           Disconnect
         </Button>
@@ -280,11 +281,11 @@ export function ConnectWalletButton({ role, compact = false }: { role?: WalletRo
   }
 
   return (
-    <div className={`flex flex-wrap items-center gap-2 ${compact ? "" : "mt-2"}`}>
+    <div className={cn("flex flex-wrap items-center gap-2", !compact && "mt-2")}>
       <Button onClick={connect} size="sm">
         {wallet.isSdkReady ? "Connect with CSPR.click" : "Loading CSPR.click..."}
       </Button>
-      {error ? <span className="max-w-[280px] text-xs text-bad">{error}</span> : null}
+      {error ? <Alert variant="destructive" className="max-w-sm"><AlertTitle>Connection failed</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
     </div>
   );
 }
@@ -303,12 +304,12 @@ export function WalletGate({
   if (wallet.isInitializing) {
     return (
       <div className="min-h-dvh px-5 pb-24 pt-32 md:px-8 md:pt-36">
-        <Card className="mx-auto max-w-3xl rounded-2xl border-white/10 bg-card/72">
+        <Card className="mx-auto max-w-3xl">
           <CardHeader>
-            <div className="mb-3 grid size-11 place-items-center rounded-full border border-white/10 bg-primary/10 text-primary">
+            <div className="mb-3 grid size-11 place-items-center rounded-lg bg-muted text-primary">
               <WalletIcon />
             </div>
-            <CardTitle className="text-3xl tracking-normal">Loading wallet session</CardTitle>
+            <CardTitle className="text-2xl">Loading wallet session</CardTitle>
             <CardDescription>Checking the local CSPR.click account state.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
@@ -323,12 +324,12 @@ export function WalletGate({
   if (!wallet.isConnected || wallet.role !== role) {
     return (
       <div className="min-h-dvh px-5 pb-24 pt-32 md:px-8 md:pt-36">
-        <Card className="mx-auto max-w-3xl rounded-2xl border-white/10 bg-card/72">
+        <Card className="mx-auto max-w-3xl">
           <CardHeader>
-            <div className="mb-3 grid size-11 place-items-center rounded-full border border-white/10 bg-primary/10 text-primary">
+            <div className="mb-3 grid size-11 place-items-center rounded-lg bg-muted text-primary">
               <LockKeyholeIcon />
             </div>
-            <CardTitle className="text-3xl tracking-normal">{title}</CardTitle>
+            <CardTitle className="text-2xl">{title}</CardTitle>
             <CardDescription className="leading-6">
               Cortex ties invoices, funding, and claims to the connected Casper account. Buyer repayment pages stay
               wallet-free because clients pay fiat through Dodo.
@@ -348,24 +349,4 @@ export function WalletGate({
 export function shortAccount(account: string): string {
   if (account.length <= 22) return account;
   return `${account.slice(0, 10)}...${account.slice(-8)}`;
-}
-
-function readWalletIdentity(account: CsprClickAccount | null): StoredWalletIdentity {
-  return {
-    publicKeyHex: account?.public_key ?? account?.publicKey ?? "",
-    accountHash: account?.account_hash ?? account?.accountHash ?? ""
-  };
-}
-
-function readStoredWalletIdentity(value: string | null): StoredWalletIdentity {
-  if (!value) return { publicKeyHex: "", accountHash: "" };
-  try {
-    const parsed = JSON.parse(value) as Partial<StoredWalletIdentity>;
-    if (typeof parsed.publicKeyHex === "string" && typeof parsed.accountHash === "string") {
-      return { publicKeyHex: parsed.publicKeyHex, accountHash: parsed.accountHash };
-    }
-  } catch {
-    // Backward compatibility with the old single-string storage shape.
-  }
-  return { publicKeyHex: value, accountHash: "" };
 }

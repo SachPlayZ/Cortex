@@ -1,13 +1,29 @@
 "use client";
 
-import { ArrowUpRightIcon, LandmarkIcon } from "lucide-react";
+import { ArrowUpRightIcon, LandmarkIcon, MenuIcon } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { ConnectWalletButton, useCasperWallet } from "./casper-wallet";
-import { buttonVariants } from "./ui/button";
-import { cn } from "@/lib/utils";
+import { Button } from "./ui/button";
+import {
+  NavigationMenu,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList
+} from "./ui/navigation-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger
+} from "./ui/sheet";
+import { Separator } from "./ui/separator";
 
 export function Nav() {
   const wallet = useCasperWallet();
-  const links =
+  const pathname = usePathname();
+  const links: Array<[string, string]> =
     wallet.role === "seller"
       ? [
           ["/seller", "Dashboard"],
@@ -16,54 +32,99 @@ export function Nav() {
         ]
       : wallet.role === "investor"
         ? [
-            ["/investor", "Dashboard"],
+            ["/investor", "Portfolio"],
             ["/investor#marketplace", "Marketplace"]
           ]
         : [
-            ["/#flow", "Flow"],
-            ["/#roles", "Roles"],
-            ["/#settlement", "Settlement"]
+            ["/#flow", "How it works"],
+            ["/#roles", "For every side"],
+            ["/#settlement", "Settlement"],
+            ["/investor", "Market"]
           ];
 
   return (
-    <header className="pointer-events-none fixed inset-x-0 top-4 z-30 px-4">
-      <nav className="pointer-events-auto mx-auto flex min-h-14 w-full max-w-6xl items-center justify-between gap-4 rounded-full border border-white/10 bg-background/72 px-3 py-2 shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-xl max-md:rounded-2xl">
-        <a className="inline-flex min-w-fit items-center gap-2 rounded-full px-2 text-sm font-semibold tracking-tight text-foreground" href="/">
-          <span className="grid size-8 place-items-center overflow-hidden rounded-full border border-white/10 bg-white/5">
-            <img src="/android-chrome-512x512.png" alt="Cortex Logo" className="size-full object-cover" />
-          </span>
-          <span>Cortex</span>
-        </a>
+    <header className="fixed inset-x-0 top-0 z-30 border-b border-border bg-background">
+      <nav className="mx-auto flex h-16 w-full max-w-7xl items-center gap-3 px-4 sm:px-6 lg:px-8" aria-label="Primary navigation">
+        <Button variant="ghost" nativeButton={false} render={<a href="/" aria-label="Cortex home" />} className="mr-auto px-1.5">
+          <img src="/android-chrome-512x512.png" alt="" className="size-8 rounded-lg" />
+          <span className="text-base font-semibold tracking-tight">Cortex</span>
+        </Button>
 
-        <div className="hidden items-center gap-1 rounded-full border border-white/8 bg-white/[0.035] p-1 text-sm text-muted-foreground md:flex">
-          {links.map(([href, label]) => (
-            <a
-              key={`${href}-${label}`}
-              href={href}
-              className="rounded-full px-3 py-1.5 transition-colors hover:bg-white/8 hover:text-foreground"
-            >
-              {label}
-            </a>
-          ))}
-        </div>
+        <NavigationMenu className="hidden md:flex">
+          <NavigationMenuList>
+            {links.map(([href, label]) => (
+              <NavigationMenuItem key={`${href}-${label}`}>
+                <NavigationMenuLink render={<a href={href} />} data-active={isActivePath(pathname, href) || undefined}>
+                  {label}
+                </NavigationMenuLink>
+              </NavigationMenuItem>
+            ))}
+          </NavigationMenuList>
+        </NavigationMenu>
 
-        <div className="flex min-w-fit items-center gap-2">
+        <div className="hidden items-center gap-2 md:flex">
           {wallet.isConnected ? (
             <ConnectWalletButton compact />
           ) : (
             <>
-              <a href="/investor" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "hidden md:inline-flex")}>
+              <Button variant="ghost" size="sm" nativeButton={false} render={<a href="/investor" />}>
                 <LandmarkIcon data-icon="inline-start" />
                 Investor
-              </a>
-              <a href="/#onboarding" className={cn(buttonVariants({ size: "sm" }))}>
+              </Button>
+              <Button size="sm" nativeButton={false} render={<a href="/#onboarding" />}>
                 Start
                 <ArrowUpRightIcon data-icon="inline-end" />
-              </a>
+              </Button>
             </>
           )}
+        </div>
+
+        <div className="md:hidden">
+          <Sheet>
+            <SheetTrigger render={<Button variant="outline" size="icon" aria-label="Open navigation" />}>
+              <MenuIcon />
+            </SheetTrigger>
+            <SheetContent>
+              <SheetHeader>
+                <SheetTitle>Cortex navigation</SheetTitle>
+                <SheetDescription>Open the workspace for the account that owns the next action.</SheetDescription>
+              </SheetHeader>
+              <Separator />
+              <div className="flex flex-col gap-2 px-4">
+                {links.map(([href, label]) => (
+                  <Button
+                    key={`${href}-${label}-mobile`}
+                    variant={isActivePath(pathname, href) ? "secondary" : "ghost"}
+                    nativeButton={false}
+                    render={<a href={href} />}
+                    className="justify-start"
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+              <Separator />
+              <div className="px-4">
+                {wallet.isConnected ? (
+                  <ConnectWalletButton compact />
+                ) : (
+                  <Button nativeButton={false} render={<a href="/#onboarding" />} className="w-full">
+                    Connect wallet
+                    <ArrowUpRightIcon data-icon="inline-end" />
+                  </Button>
+                )}
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
       </nav>
     </header>
   );
+}
+
+function isActivePath(pathname: string, href: string) {
+  if (href.includes("#")) return false;
+  const path = href.split("#")[0];
+  if (path === "/") return pathname === "/";
+  return pathname === path || pathname.startsWith(`${path}/`);
 }

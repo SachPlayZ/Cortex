@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { sha256Hex, type InvoiceStatus } from "@cortex/shared";
+import type { InvoiceStatus } from "@cortex/shared";
 import type { ReceivableView } from "../../lib/finance";
 import { getCasperLifecycleClient, getPaymentRuntime, hasAgentSignerConfig, hasCasperLifecycleConfig } from "../payment-runtime";
-import { CasperChainSyncService } from "./casper-chain-sync";
+import { CasperChainSyncService, contractInvoiceIdHash } from "./casper-chain-sync";
 import type { BootstrapStatusRecord, InvoicePaymentRecord, LifecycleAction, LifecycleIntentRecord } from "./payment-store";
 
 type PreparedLifecycleAction = {
@@ -112,11 +112,6 @@ export class CasperLifecycleService {
     const intent = await this.verifyIntent(invoiceId, intentId, "fund", deployHash, "Listed");
     return this.runConfirm(intentId, async () => {
       await this.verifyTransactionAgainstIntent(intent, deployHash);
-      const adminSigner = this.requireAdminSigner();
-      const lifecycle = getCasperLifecycleClient();
-      const invoice = await this.requireInvoice(invoiceId);
-      const armDeployHash = await lifecycle.armEscrowPosition(invoice, intent.publicKeyHex, adminSigner);
-      await lifecycle.waitForTransaction(armDeployHash);
       const synced = await this.syncAndPersist(invoiceId, {
         fundDeployHash: deployHash,
         investorPublicKey: intent.publicKeyHex,
@@ -249,7 +244,7 @@ export class CasperLifecycleService {
     const { paymentStore } = await getPaymentRuntime();
     const intentId = randomUUID();
     const expiresAt = new Date(Date.now() + INTENT_TTL_MS).toISOString();
-    const expectedInvoiceIdHash = (invoice.casperInvoiceIdHash ?? sha256Hex(invoice.id)) as `0x${string}`;
+    const expectedInvoiceIdHash = contractInvoiceIdHash(invoice.id);
     await paymentStore.upsertLifecycleIntent({
       id: intentId,
       invoiceId: invoice.id,
@@ -298,8 +293,11 @@ export class CasperLifecycleService {
     try {
       if (expectedPreStatus) {
         const chainInvoice = await this.chainSyncRequired().getInvoiceState(invoiceId);
-        if (chainInvoice.statusCasper !== expectedPreStatus) {
-          throw new Error(`Lifecycle action requires verified Casper status ${expectedPreStatus}, got ${chainInvoice.statusCasper}`);
+        const expectedPostStatus = postStatusForAction(action);
+        if (chainInvoice.statusCasper !== expectedPreStatus && chainInvoice.statusCasper !== expectedPostStatus) {
+          throw new Error(
+            `Lifecycle action requires verified Casper status ${expectedPreStatus} or ${expectedPostStatus}, got ${chainInvoice.statusCasper}`
+          );
         }
       }
     } catch (error) {
@@ -331,6 +329,7 @@ export class CasperLifecycleService {
   }
 
   private async verifyTransactionAgainstIntent(intent: LifecycleIntentRecord, deployHash: string): Promise<void> {
+    await getCasperLifecycleClient().waitForTransaction(deployHash);
     const receipt = await getCasperLifecycleClient().getTransactionReceipt(deployHash);
     const tx = receipt.rawJSON as {
       transaction?: {
@@ -465,6 +464,21 @@ export class CasperLifecycleService {
   }
 }
 
+function postStatusForAction(action: LifecycleAction): InvoiceStatus | undefined {
+  switch (action) {
+    case "list":
+      return "Listed";
+    case "fund":
+      return "RepaymentPending";
+    case "cashout":
+      return "RepaymentPending";
+    case "claim":
+      return "Settled";
+    case "mint":
+      return undefined;
+  }
+}
+
 function stripHash(value: string): string {
   return value.replace(/^hash-/, "").replace(/^0x/, "").toLowerCase();
 }
@@ -474,16 +488,8 @@ function normalizeEntryPoint(value: string | { Custom?: string } | undefined): s
 }
 
 function expectedPackageHashForAction(action: LifecycleAction): string {
-  switch (action) {
-    case "mint":
-    case "list":
-      return process.env.INVOICE_REGISTRY_PACKAGE_HASH ?? "";
-    case "fund":
-    case "cashout":
-      return process.env.FUNDING_VAULT_PACKAGE_HASH ?? "";
-    case "claim":
-      return process.env.REPAYMENT_ESCROW_PACKAGE_HASH ?? "";
-  }
+  void action;
+  return process.env.INVOICE_REGISTRY_PACKAGE_HASH ?? "";
 }
 
 function readPreparedNamedArgs(transactionJson: unknown) {

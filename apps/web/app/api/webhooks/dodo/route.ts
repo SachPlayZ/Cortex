@@ -28,7 +28,8 @@ export async function POST(request: Request): Promise<Response> {
     deferSettlement: true
   });
   if (result.outcome === "rejected") {
-    return Response.json({ ok: false, reason: result.reason }, { status: 400 });
+    const ignored = result.reason === "not_successful_payment";
+    return Response.json({ ok: ignored, ignored, reason: result.reason }, { status: ignored ? 200 : 400 });
   }
   if (result.outcome === "accepted") {
     // Ack Dodo fast; Casper settlement runs after the response. Failed jobs stay

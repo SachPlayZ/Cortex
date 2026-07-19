@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-19T00:00:00.000Z",
+  "title": "Design System: Cortex",
+  "extensions": {
+    "colorMeta": {
+      "primary": { "role": "primary", "displayName": "Settlement Lime", "canonical": "#D9FF6F", "tonalRamp": ["#1D2408", "#39470F", "#566A1D", "#748E2D", "#94B63F", "#B5DE54", "#D9FF6F", "#F3FFD1"] },
+      "signal": { "role": "secondary", "displayName": "Proof Mint", "canonical": "#3EE89E", "tonalRamp": ["#06251A", "#0B4933", "#126E4E", "#1A956A", "#24BD83", "#3EE89E", "#8CF4C5", "#D8FFED"] },
+      "background": { "role": "neutral", "displayName": "Ledger Black", "canonical": "#080B0F", "tonalRamp": ["#080B0F", "#10151A", "#202830", "#39434C", "#59636C", "#7F8991", "#B1B8BD", "#F3F5F6"] },
+      "foreground": { "role": "neutral", "displayName": "Warm Ink", "canonical": "#F8F4E8", "tonalRamp": ["#1F1D18", "#403C31", "#625E4E", "#86816E", "#ACA691", "#D3CDBA", "#F8F4E8", "#FFFEFA"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Landing-page claim only." },
+      "headline": { "displayName": "Headline", "purpose": "Page and workflow titles." },
+      "body": { "displayName": "Body", "purpose": "Readable explanations and guidance." },
+      "label": { "displayName": "Label", "purpose": "Controls, metadata, and state descriptions." }
+    },
+    "shadows": [
+      { "name": "structural-nav", "value": "0 6px 8px rgba(0,0,0,0.22)", "purpose": "Separates fixed navigation from scrolling content; never used on cards." }
+    ],
+    "motion": [
+      { "name": "state-fast", "value": "180ms cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "Hover, focus, active, and compact state changes." },
+      { "name": "handoff", "value": "240ms cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Workflow handoffs and disclosure." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single decisive action in a region.",
+      "html": "<button class=\"ds-button-primary\">Continue</button>",
+      "css": ".ds-button-primary{height:44px;padding:0 18px;border:0;border-radius:10px;background:var(--primary,#D9FF6F);color:var(--primary-foreground,#080B0F);font:500 14px Geist,system-ui,sans-serif;transition:background 180ms cubic-bezier(.22,1,.36,1),transform 180ms cubic-bezier(.22,1,.36,1)}.ds-button-primary:hover{background:color-mix(in oklch,var(--primary,#D9FF6F),black 12%)}.ds-button-primary:active{transform:translateY(1px)}.ds-button-primary:focus-visible{outline:3px solid color-mix(in oklch,var(--primary,#D9FF6F),transparent 55%);outline-offset:2px}"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Peer and secondary action.",
+      "html": "<button class=\"ds-button-outline\">Inspect proof</button>",
+      "css": ".ds-button-outline{height:44px;padding:0 18px;border:1px solid var(--border,#F8F4E821);border-radius:10px;background:var(--background,#080B0F);color:var(--foreground,#F8F4E8);font:500 14px Geist,system-ui,sans-serif;transition:background 180ms cubic-bezier(.22,1,.36,1)}.ds-button-outline:hover{background:var(--muted,#202830)}.ds-button-outline:focus-visible{outline:3px solid color-mix(in oklch,var(--primary,#D9FF6F),transparent 55%);outline-offset:2px}"
+    },
+    {
+      "name": "Ledger Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "A single operational concept with explicit hierarchy.",
+      "html": "<article class=\"ds-card\"><strong>Repayment proof</strong><p>Webhook verified. Casper submission pending.</p></article>",
+      "css": ".ds-card{padding:24px;border:1px solid var(--border,#F8F4E821);border-radius:14px;background:var(--card,#10151A);color:var(--card-foreground,#F8F4E8);font:400 14px/1.55 Geist,system-ui,sans-serif}.ds-card strong{display:block;margin-bottom:6px;font-size:16px;font-weight:600}.ds-card p{margin:0;color:var(--muted-foreground,#A5A196)}"
+    },
+    {
+      "name": "Ledger Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Readable financial and invoice data entry.",
+      "html": "<input class=\"ds-input\" value=\"INV-2026-018\" aria-label=\"Invoice number\" />",
+      "css": ".ds-input{width:100%;height:44px;padding:0 14px;border:1px solid var(--input,#F8F4E824);border-radius:10px;background:var(--card,#10151A);color:var(--foreground,#F8F4E8);font:400 14px Geist,system-ui,sans-serif}.ds-input:focus-visible{border-color:var(--ring,#D9FF6F);outline:3px solid color-mix(in oklch,var(--ring,#D9FF6F),transparent 60%)}"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "description": "Sentence-case lifecycle label with semantic color and text.",
+      "html": "<span class=\"ds-status\">Webhook verified</span>",
+      "css": ".ds-status{display:inline-flex;align-items:center;min-height:24px;padding:2px 9px;border-radius:999px;background:color-mix(in oklch,var(--success,#8EE66B),transparent 86%);color:var(--success,#8EE66B);font:600 12px/1 Geist,system-ui,sans-serif}"
+    },
+    {
+      "name": "Role Navigation",
+      "kind": "nav",
+      "description": "Compact role-aware route and wallet shell.",
+      "html": "<nav class=\"ds-nav\"><strong>Cortex</strong><a href=\"#\">Dashboard</a><a href=\"#\">Invoices</a></nav>",
+      "css": ".ds-nav{display:flex;align-items:center;gap:18px;padding:10px 14px;border:1px solid var(--border,#F8F4E821);border-radius:14px;background:var(--background,#080B0F);color:var(--foreground,#F8F4E8);font:500 14px Geist,system-ui,sans-serif}.ds-nav strong{margin-right:auto}.ds-nav a{color:var(--muted-foreground,#A5A196);text-decoration:none}.ds-nav a:hover,.ds-nav a:focus-visible{color:var(--foreground,#F8F4E8)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Verified Ledger",
+    "overview": "Cortex feels like a settlement desk condensed into a precise web product: dark, quiet, and highly legible until a verified event earns a bright signal. Real amounts, checks, timelines, hashes, wallet identities, and state changes provide the visual material.",
+    "keyCharacteristics": ["Near-black accounting surfaces with warm high-contrast text.", "Acid-lime primary actions reserved for decisive transitions.", "Compact Shadcn primitives composed into clear operational flows.", "Tonal depth, strong rules, and alignment instead of ambient shadows.", "Product evidence as the main visual material."],
+    "rules": [
+      { "name": "The Earned Signal Rule", "body": "Lime and mint appear only for actions, current selection, verification, and settled state—not decoration.", "section": "colors" },
+      { "name": "The Six-Rem Ceiling Rule", "body": "Display text never exceeds 6rem and tracking never tightens beyond -0.04em.", "section": "typography" },
+      { "name": "The No Ghost Cards Rule", "body": "Never pair a one-pixel border with a wide decorative drop shadow.", "section": "elevation" }
+    ],
+    "dos": ["Do lead each page with one clear task and the state required to perform it.", "Do use Shadcn components and their built-in variants before custom markup or styling.", "Do use real amounts, hashes, checks, events, and transaction links as visual material."],
+    "donts": ["Don't use generic AI landing-page scaffolds, crypto-casino aesthetics, or fake AI theatre.", "Don't use placeholder stock imagery, decorative glow and grain, glassmorphism, or repetitive card grids.", "Don't obscure financial state, imply repayment from a redirect, or hide transaction proof."]
+  }
+}

@@ -67,6 +67,7 @@ contracts
 ### Core trust model
 
 - Casper is the financial source of truth.
+- The deployed MVP routes create, score, list, fund, cashout, repayment, default, and claim through `InvoiceRegistry`; standalone vault/escrow packages are non-canonical modules.
 - Backend records are cache/orchestration state.
 - Uploaded invoice data and private buyer details stay off-chain.
 - Only hashes and canonical financial fields are eligible for on-chain calls.

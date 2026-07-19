@@ -8,7 +8,7 @@ import { shortAccount, useCasperWallet } from "./casper-wallet";
 import { StatusPill } from "./status-pill";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
-import { Button, buttonVariants } from "./ui/button";
+import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./ui/card";
 import { Progress, ProgressLabel } from "./ui/progress";
 import { Spinner } from "./ui/spinner";
@@ -39,13 +39,16 @@ type CasperHealth = {
 
 const statusOrder = ["Created", "Scored", "Listed", "Funded", "RepaymentPending", "Repaid", "Settled"];
 
-export function InvoiceLifecyclePanel({ invoice, compact = false }: Props) {
+export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false }: Props) {
   const wallet = useCasperWallet();
   const router = useRouter();
   const [busyAction, setBusyAction] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [health, setHealth] = useState<CasperHealth | null>(null);
+  const [invoice, setInvoice] = useState(initialInvoice);
+
+  useEffect(() => setInvoice(initialInvoice), [initialInvoice]);
 
   useEffect(() => {
     void fetch("/api/admin/casper/health", { cache: "no-store" })
@@ -104,13 +107,14 @@ export function InvoiceLifecyclePanel({ invoice, compact = false }: Props) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           intent_id: preparedBody.intent_id,
-          deploy_hash: submittedHash || preparedBody.transaction_hash
+          deploy_hash: submittedHash
         })
       });
       const confirmBody = (await confirmResponse.json()) as { invoice?: ReceivableView; error?: string };
       if (!confirmResponse.ok) {
         throw new Error(confirmBody.error ?? `Unable to confirm ${label.toLowerCase()}`);
       }
+      if (confirmBody.invoice) setInvoice(confirmBody.invoice);
       setMessage(`${label} confirmed on Casper.`);
       router.refresh();
     } catch (err) {
@@ -133,11 +137,11 @@ export function InvoiceLifecyclePanel({ invoice, compact = false }: Props) {
   const progress = Math.round(((currentIndex + 1) / statusOrder.length) * 100);
 
   return (
-    <Card className={cn("rounded-2xl border-white/10 bg-card/72", compact && "bg-background/54")}>
+    <Card size={compact ? "sm" : "default"}>
       <CardHeader className="gap-4 md:grid-cols-[1fr_auto]">
         <div>
           <div className="mb-4 flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-full border border-white/10 bg-primary/10 text-primary">
+            <span className="grid size-10 place-items-center rounded-lg bg-muted text-primary">
               <RadioTowerIcon />
             </span>
             <StatusPill status={invoice.statusCasper} />
@@ -146,7 +150,7 @@ export function InvoiceLifecyclePanel({ invoice, compact = false }: Props) {
           <CardDescription>Financial state is driven by deploy-confirmed transitions.</CardDescription>
         </div>
         {health ? (
-          <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.035] p-3 text-sm">
+          <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/50 p-3 text-sm">
             <span className="text-muted-foreground">Lifecycle mode</span>
             <div className="flex items-center gap-2">
               <Badge variant={health.lifecycle_mode === "real" ? "default" : "destructive"}>{health.lifecycle_mode}</Badge>
@@ -170,15 +174,15 @@ export function InvoiceLifecyclePanel({ invoice, compact = false }: Props) {
             const isCurrent = invoice.statusCasper === label;
             const isDone = isPast || isCurrent || Boolean(deployHash);
             return (
-              <div key={label} className={cn("min-w-0 rounded-xl border border-white/10 bg-white/[0.035] p-3", isCurrent && "border-primary/50 bg-primary/10")}>
+              <div key={label} className={cn("min-w-0 rounded-lg border border-border bg-muted/50 p-3", isCurrent && "border-primary/50 bg-primary/10")}>
                 <div className="mb-3 flex items-center justify-between gap-2">
-                  <span className={cn("grid size-7 place-items-center rounded-full", isDone ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
-                    {isDone ? <CheckCircle2Icon /> : index + 1}
-                  </span>
+                  <Badge variant={isDone ? "default" : "outline"}>
+                    {isDone ? <CheckCircle2Icon data-icon="inline-start" /> : index + 1}
+                  </Badge>
                   {isCurrent ? <Badge variant="secondary">current</Badge> : null}
                 </div>
                 <div className="truncate text-sm font-medium text-foreground">{label}</div>
-                <div className="mt-2 min-h-8 break-all font-mono text-[10.5px] leading-4 text-muted-foreground">
+                <div className="mt-2 min-h-8 break-all font-mono text-xs leading-4 text-muted-foreground">
                   {deployHash ?? "Awaiting deploy"}
                 </div>
               </div>
@@ -187,7 +191,7 @@ export function InvoiceLifecyclePanel({ invoice, compact = false }: Props) {
         </div>
 
         {wallet.isConnected ? (
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/[0.035] p-3">
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/50 p-3">
             <WalletIcon />
             <span className="text-sm text-muted-foreground">Connected {wallet.role} wallet</span>
             <span className="break-all font-mono text-xs text-foreground">{shortAccount(wallet.accountHash)}</span>
@@ -244,10 +248,10 @@ export function InvoiceLifecyclePanel({ invoice, compact = false }: Props) {
         )}
 
         <div className="flex flex-wrap items-center gap-3">
-          <a href={`/buyer/pay/${invoice.id}`} className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+          <Button variant="outline" size="sm" nativeButton={false} render={<a href={`/buyer/pay/${invoice.id}`} />}>
             Buyer payment page
             <ArrowUpRightIcon data-icon="inline-end" />
-          </a>
+          </Button>
           {invoice.statusLastSyncedAt ? (
             <span className="text-xs text-muted-foreground">Synced {new Date(invoice.statusLastSyncedAt).toLocaleString()}</span>
           ) : null}

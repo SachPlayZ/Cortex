@@ -5,11 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "tsc -p tsconfig.json",
+    "build": "next build",
     "lint": "tsc -p tsconfig.json --noEmit",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:e2e": "vitest run tests/dodo.test.ts"
+    "test:e2e": "vitest run tests/lifecycle.test.ts tests/dodo.test.ts tests/casper-chain-sync.test.ts tests/casper-sdk.test.ts tests/casper-wallet.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

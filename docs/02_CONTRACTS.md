@@ -68,6 +68,8 @@ Failure branches:
 
 ## Contract 1: InvoiceRegistry
 
+> Current Casper Testnet MVP: `InvoiceRegistry` is the single authoritative lifecycle contract. Funding, seller cashout, gateway repayment, default, and investor claim all call this package directly. The standalone `FundingVault` and `RepaymentEscrow` packages remain isolated contract modules and test fixtures; their events must not drive invoice status until authenticated cross-contract orchestration is deployed.
+
 ### Purpose
 
 The canonical record for invoice metadata, status, and lifecycle events.

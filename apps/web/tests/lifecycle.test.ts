@@ -23,6 +23,7 @@ const fakeLifecycleClient = {
 let lastConfirmedHash = "";
 
 vi.mock("../server/integrations/casper-chain-sync", () => ({
+  contractInvoiceIdHash: (invoiceId: string) => invoiceId,
   CasperChainSyncService: class {
     async getInvoiceState(invoiceId: string) {
       const invoice = await store.requireInvoice(invoiceId);
@@ -168,12 +169,7 @@ describe("CasperLifecycleService", () => {
                     Stored: {
                       id: {
                         ByPackageHash: {
-                          addr:
-                            transactionHash === "tx-fund" || transactionHash === "tx-cashout"
-                              ? "756757ea8d976f7cdfbae9852fc653f3e0cab00dacd729cc6564943f4584982c"
-                              : transactionHash === "tx-claim"
-                                ? "5ca1cb4499af61e4cec8e51ae105c005e1d11cc9ba5685e09c2c5d4c4dea448f"
-                                : "5fef146666891b7af8465e6030028f336aa2efe6e0e6d2ba520b5210877642c4"
+                          addr: "5fef146666891b7af8465e6030028f336aa2efe6e0e6d2ba520b5210877642c4"
                         }
                       }
                     }
@@ -206,6 +202,7 @@ describe("CasperLifecycleService", () => {
     expect(prepared.transaction_hash).toBe("tx-create");
 
     const invoice = await service.confirmMint("inv_lifecycle_1", prepared.intent_id, "tx-create");
+    expect(fakeLifecycleClient.waitForTransaction).toHaveBeenCalledWith("tx-create");
     expect(fakeLifecycleClient.waitForTransaction).toHaveBeenCalledWith("tx-score");
     expect(fakeLifecycleClient.postRiskScore).toHaveBeenCalled();
     expect(fakeLifecycleClient.noteInvoiceScored).toHaveBeenCalledWith("02agentpub", { keyPath: "/tmp/admin_secret_key.pem" });
@@ -222,6 +219,7 @@ describe("CasperLifecycleService", () => {
     expect(prepared.transaction_hash).toBe("tx-list");
 
     const invoice = await service.confirmList("inv_lifecycle_1", prepared.intent_id, "tx-list");
+    expect(fakeLifecycleClient.waitForTransaction).toHaveBeenCalledWith("tx-list");
     expect(invoice.statusCasper).toBe("Listed");
     expect(invoice.listDeployHash).toBe("tx-list");
   });
@@ -235,7 +233,8 @@ describe("CasperLifecycleService", () => {
     expect(prepared.transaction_hash).toBe("tx-fund");
 
     const invoice = await service.confirmFund("inv_lifecycle_1", prepared.intent_id, "tx-fund");
-    expect(fakeLifecycleClient.armEscrowPosition).toHaveBeenCalled();
+    expect(fakeLifecycleClient.waitForTransaction).toHaveBeenCalledWith("tx-fund");
+    expect(fakeLifecycleClient.armEscrowPosition).not.toHaveBeenCalled();
     expect(invoice.statusCasper).toBe("RepaymentPending");
     expect(invoice.investorAccount).toBe("account-hash-investor");
     expect(invoice.fundDeployHash).toBe("tx-fund");
@@ -250,6 +249,7 @@ describe("CasperLifecycleService", () => {
     expect(prepared.transaction_hash).toBe("tx-cashout");
 
     const invoice = await service.confirmCashout("inv_lifecycle_1", prepared.intent_id, "tx-cashout");
+    expect(fakeLifecycleClient.waitForTransaction).toHaveBeenCalledWith("tx-cashout");
     expect(invoice.statusCasper).toBe("RepaymentPending");
     expect(invoice.cashoutDeployHash).toBe("tx-cashout");
   });
@@ -267,7 +267,11 @@ describe("CasperLifecycleService", () => {
     const prepared = await service.prepareClaim("inv_lifecycle_1", "02investorpub", "account-hash-investor");
     expect(prepared.transaction_hash).toBe("tx-claim");
 
+    // The claim can execute before the confirmation callback reaches the server.
+    await store.updateInvoice("inv_lifecycle_1", { statusCasper: "Settled" });
+
     const invoice = await service.confirmClaim("inv_lifecycle_1", prepared.intent_id, "tx-claim");
+    expect(fakeLifecycleClient.waitForTransaction).toHaveBeenCalledWith("tx-claim");
     expect(invoice.statusCasper).toBe("Settled");
     expect(invoice.claimDeployHash).toBe("tx-claim");
   });

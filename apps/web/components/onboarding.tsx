@@ -2,39 +2,34 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowRightIcon, LandmarkIcon, ReceiptTextIcon } from "lucide-react";
+import { ArrowRightIcon, LandmarkIcon, ReceiptTextIcon, ShieldCheckIcon } from "lucide-react";
 import { useCasperWallet } from "./casper-wallet";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle
-} from "./ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./ui/card";
+import { Separator } from "./ui/separator";
 import { Spinner } from "./ui/spinner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 
 type OnboardingRole = "seller" | "investor";
 
-const roleCards = [
-  {
-    role: "seller" as const,
-    title: "Freelancer console",
-    body: "Upload evidence, review underwriting, mint and list the receivable, then generate a hosted Dodo payment link after funding.",
-    cta: "Connect as freelancer",
-    icon: ReceiptTextIcon
+const roleCopy = {
+  seller: {
+    title: "Freelancer workspace",
+    body: "Upload evidence, review underwriting, mint and list the receivable, then create the client payment link after funding.",
+    cta: "Connect seller wallet",
+    Icon: ReceiptTextIcon,
+    checks: ["Own the invoice listing", "Sign mint and list", "Withdraw the funded advance"]
   },
-  {
-    role: "investor" as const,
-    title: "Investor market",
-    body: "Inspect risk terms, fund one listed receivable, track webhook-confirmed repayment, and claim after Casper settlement.",
-    cta: "Connect as investor",
-    icon: LandmarkIcon
+  investor: {
+    title: "Investor workspace",
+    body: "Inspect deterministic terms, fund one receivable, track verified repayment, and claim after Casper confirms settlement.",
+    cta: "Connect investor wallet",
+    Icon: LandmarkIcon,
+    checks: ["Compare receivable terms", "Sign funding transaction", "Claim after repayment"]
   }
-];
+};
 
 export function OnboardingPanel() {
   const router = useRouter();
@@ -59,71 +54,66 @@ export function OnboardingPanel() {
   }
 
   return (
-    <section className="grid gap-6 rounded-[28px] border border-white/10 bg-card/72 p-4 shadow-[0_34px_120px_rgba(0,0,0,0.3)] backdrop-blur md:grid-cols-[0.78fr_1.22fr] md:p-6">
-      <div className="flex min-h-[360px] flex-col justify-between overflow-hidden rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_20%_0%,rgba(217,255,111,0.2),transparent_18rem),rgba(255,255,255,0.035)] p-6">
-        <div className="flex flex-col gap-5">
-          <Badge variant="secondary" className="w-fit">Wallet scoped</Badge>
-          <h2 className="max-w-lg text-4xl font-semibold leading-[0.98] tracking-normal text-foreground md:text-5xl">
-            Choose the account that owns the next action.
-          </h2>
-          <p className="max-w-md text-sm leading-6 text-muted-foreground">
-            Cortex does not show generic dashboards. Your connected Casper wallet opens the workspace that can legally
-            sign the next transaction.
-          </p>
+    <Card>
+      <CardHeader className="grid gap-6 md:grid-cols-[1fr_auto] md:items-end">
+        <div className="flex max-w-3xl flex-col items-start gap-4">
+          <Badge variant="outline">Wallet-scoped access</Badge>
+          <CardTitle className="text-3xl md:text-4xl">Open the workspace that can sign the next action.</CardTitle>
+          <CardDescription className="max-w-2xl text-base leading-7">
+            Cortex never drops every user into the same dashboard. The connected account determines which financial actions are legal and relevant.
+          </CardDescription>
         </div>
-        <div className="mt-10 grid gap-3 text-sm text-muted-foreground">
-          <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-3">
-            <span>Seller signs mint and list</span>
-            <span className="text-primary">Casper</span>
-          </div>
-          <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-3">
-            <span>Investor signs fund and claim</span>
-            <span className="text-primary">Casper</span>
-          </div>
-          <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-3">
-            <span>Buyer pays without wallet</span>
-            <span className="text-primary">Dodo</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        {roleCards.map((card) => {
-          const Icon = card.icon;
-          const isPending = pendingRole === card.role;
-          return (
-            <Card key={card.role} className="group rounded-2xl border-white/10 bg-background/54 transition-colors hover:bg-background/78">
-              <CardHeader>
-                <div className="mb-5 grid size-11 place-items-center rounded-full border border-white/10 bg-primary/10 text-primary transition-transform duration-700 ease-out group-hover:scale-105">
-                  <Icon />
+        <Badge variant="secondary"><ShieldCheckIcon data-icon="inline-start" /> CSPR.click</Badge>
+      </CardHeader>
+      <CardContent>
+        <Tabs defaultValue="seller">
+          <TabsList>
+            <TabsTrigger value="seller"><ReceiptTextIcon data-icon="inline-start" />Freelancer</TabsTrigger>
+            <TabsTrigger value="investor"><LandmarkIcon data-icon="inline-start" />Investor</TabsTrigger>
+          </TabsList>
+          {(Object.keys(roleCopy) as OnboardingRole[]).map((role) => {
+            const copy = roleCopy[role];
+            const Icon = copy.Icon;
+            const isPending = pendingRole === role;
+            return (
+              <TabsContent key={role} value={role} className="pt-6">
+                <div className="grid gap-8 lg:grid-cols-[1fr_0.9fr] lg:items-center">
+                  <div className="flex flex-col items-start gap-5">
+                    <div className="grid size-11 place-items-center rounded-lg bg-muted text-primary"><Icon /></div>
+                    <div>
+                      <h3 className="m-0 text-2xl font-semibold text-foreground">{copy.title}</h3>
+                      <p className="m-0 mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">{copy.body}</p>
+                    </div>
+                    <Button type="button" size="lg" onClick={() => void start(role)} disabled={pendingRole !== null}>
+                      {isPending ? <Spinner data-icon="inline-start" /> : <ArrowRightIcon data-icon="inline-start" />}
+                      {isPending ? "Connecting" : copy.cta}
+                    </Button>
+                  </div>
+                  <div className="flex flex-col gap-0 rounded-lg border border-border px-4">
+                    {copy.checks.map((check, index) => (
+                      <div key={check}>
+                        <div className="flex items-center justify-between gap-4 py-4">
+                          <span className="text-sm text-foreground">{check}</span>
+                          <Badge variant="secondary">Casper</Badge>
+                        </div>
+                        {index < copy.checks.length - 1 ? <Separator /> : null}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <CardTitle className="text-3xl tracking-normal">{card.title}</CardTitle>
-                <CardDescription className="leading-6">{card.body}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.035] p-3 text-sm text-muted-foreground">
-                  <span>Evidence hash visible</span>
-                  <span>Deploy hashes visible</span>
-                  <span>Payment redirect never marks paid</span>
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button type="button" onClick={() => void start(card.role)} disabled={pendingRole !== null}>
-                  {isPending ? <Spinner data-icon="inline-start" /> : <ArrowRightIcon data-icon="inline-start" />}
-                  {isPending ? "Connecting" : card.cta}
-                </Button>
-              </CardFooter>
-            </Card>
-          );
-        })}
-      </div>
-
+              </TabsContent>
+            );
+          })}
+        </Tabs>
+      </CardContent>
       {error ? (
-        <Alert variant="destructive" className="md:col-span-2">
-          <AlertTitle>Wallet connection failed</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+        <CardFooter>
+          <Alert variant="destructive">
+            <AlertTitle>Wallet connection failed</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        </CardFooter>
       ) : null}
-    </section>
+    </Card>
   );
 }

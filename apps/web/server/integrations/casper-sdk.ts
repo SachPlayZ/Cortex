@@ -137,25 +137,33 @@ export class CasperLifecycleClient {
   private readonly escrow: CasperContractCaller;
   private readonly reputation: CasperContractCaller;
 
-  constructor(config: CasperLifecycleConfig) {
+  constructor(
+    config: CasperLifecycleConfig,
+    callers: Partial<{
+      registry: CasperContractCaller;
+      vault: CasperContractCaller;
+      escrow: CasperContractCaller;
+      reputation: CasperContractCaller;
+    }> = {}
+  ) {
     const shared = {
       rpcUrl: config.rpcUrl,
       chainName: config.chainName,
       paymentMotes: config.paymentMotes
     };
-    this.registry = new CasperContractCaller({
+    this.registry = callers.registry ?? new CasperContractCaller({
       ...shared,
       packageHash: config.registryPackageHash
     });
-    this.vault = new CasperContractCaller({
+    this.vault = callers.vault ?? new CasperContractCaller({
       ...shared,
       packageHash: config.fundingVaultPackageHash
     });
-    this.escrow = new CasperContractCaller({
+    this.escrow = callers.escrow ?? new CasperContractCaller({
       ...shared,
       packageHash: config.repaymentEscrowPackageHash
     });
-    this.reputation = new CasperContractCaller({
+    this.reputation = callers.reputation ?? new CasperContractCaller({
       ...shared,
       packageHash: config.agentReputationPackageHash
     });
@@ -222,24 +230,22 @@ export class CasperLifecycleClient {
   }
 
   async fundInvoice(invoice: ReceivableView, investor: CasperSigner): Promise<string> {
-    return this.vault.call(
+    return this.registry.call(
       investor,
       "fund_invoice",
       casperSdk.Args.fromMap({
         invoice_id: hashArg(invoice.id),
-        seller: invoicePartyAddressArg(invoice.sellerPublicKey, invoice.sellerAccount),
-        advance_amount_usd_cents: u256Arg(invoice.advanceAmountUsdCents ?? "0"),
-        expected_repayment_usd_cents: u256Arg(invoice.repaymentAmountUsdCents)
+        funded_amount_usd_cents: u256Arg(invoice.advanceAmountUsdCents ?? "0")
       })
     );
   }
 
   async cashOutAdvance(invoiceId: string, seller: CasperSigner): Promise<string> {
-    return this.vault.call(seller, "cash_out_advance", casperSdk.Args.fromMap({ invoice_id: hashArg(invoiceId) }));
+    return this.registry.call(seller, "cash_out_advance", casperSdk.Args.fromMap({ invoice_id: hashArg(invoiceId) }));
   }
 
   async claimRepayment(invoiceId: string, investor: CasperSigner): Promise<string> {
-    return this.escrow.call(investor, "claim_repayment", casperSdk.Args.fromMap({ invoice_id: hashArg(invoiceId) }));
+    return this.registry.call(investor, "claim_repayment", casperSdk.Args.fromMap({ invoice_id: hashArg(invoiceId) }));
   }
 
   async depositVaultLiquidity(amountUsdCents: string, admin: CasperSigner): Promise<string> {
@@ -271,7 +277,7 @@ export class CasperLifecycleClient {
     paidAmountUsdCents: string,
     relayer: CasperSigner
   ): Promise<string> {
-    return this.escrow.call(
+    return this.registry.call(
       relayer,
       "record_gateway_repayment",
       casperSdk.Args.fromMap({
@@ -323,20 +329,18 @@ export class CasperLifecycleClient {
   }
 
   prepareFundInvoice(invoice: ReceivableView, investorPublicKeyHex: string): CasperPreparedTransaction {
-    return this.vault.prepare(
+    return this.registry.prepare(
       investorPublicKeyHex,
       "fund_invoice",
       casperSdk.Args.fromMap({
         invoice_id: hashArg(invoice.id),
-        seller: invoicePartyAddressArg(invoice.sellerPublicKey, invoice.sellerAccount),
-        advance_amount_usd_cents: u256Arg(invoice.advanceAmountUsdCents ?? "0"),
-        expected_repayment_usd_cents: u256Arg(invoice.repaymentAmountUsdCents)
+        funded_amount_usd_cents: u256Arg(invoice.advanceAmountUsdCents ?? "0")
       })
     );
   }
 
   prepareCashOutAdvance(invoiceId: string, sellerPublicKeyHex: string): CasperPreparedTransaction {
-    return this.vault.prepare(
+    return this.registry.prepare(
       sellerPublicKeyHex,
       "cash_out_advance",
       casperSdk.Args.fromMap({ invoice_id: hashArg(invoiceId) })
@@ -344,7 +348,7 @@ export class CasperLifecycleClient {
   }
 
   prepareClaimRepayment(invoiceId: string, investorPublicKeyHex: string): CasperPreparedTransaction {
-    return this.escrow.prepare(
+    return this.registry.prepare(
       investorPublicKeyHex,
       "claim_repayment",
       casperSdk.Args.fromMap({ invoice_id: hashArg(invoiceId) })

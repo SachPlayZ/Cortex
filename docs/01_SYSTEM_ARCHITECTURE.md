@@ -303,9 +303,8 @@ POST /api/invoices/upload
 ```txt
 Investor clicks Fund
 → CSPR.click signs Casper transaction
-→ FundingVault.fund_invoice(invoice_id)
-→ backend arms RepaymentEscrow position
-→ aggregate Casper status = RepaymentPending
+→ InvoiceRegistry.fund_invoice(invoice_id, funded_amount_usd_cents)
+→ InvoiceRegistry status = RepaymentPending
 → CSPR.cloud stream updates UI
 ```
 
@@ -322,9 +321,9 @@ Buyer opens repayment page
 → validate invoice metadata and amount
 → idempotency check
 → enqueue settlement relay
-→ relayer calls RepaymentEscrow.record_gateway_repayment(...)
-→ contract marks invoice REPAID
-→ investor claims
+→ relayer calls InvoiceRegistry.record_gateway_repayment(...)
+→ InvoiceRegistry marks invoice Repaid and updates agent reputation
+→ investor calls InvoiceRegistry.claim_repayment(...)
 ```
 
 ## Critical Design Decision: Webhook → Relayer → Casper

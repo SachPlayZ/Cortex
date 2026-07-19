@@ -16,19 +16,22 @@ const EVENT_CURSOR_ID = "casper_events";
 const BOOTSTRAP_STATUS_ID = "invoice_registry_bootstrap";
 const CONTRACT_SOURCES = [
   {
-    cursorId: "invoice_registry_events",
+    cursorId: "invoice_registry_events_v5",
+    eventIdPrefix: "invoice_registry_events",
     packageHashEnv: "INVOICE_REGISTRY_PACKAGE_HASH",
     contractName: "InvoiceRegistry",
     eventOffset: 0
   },
   {
-    cursorId: "funding_vault_events",
+    cursorId: "funding_vault_events_v5",
+    eventIdPrefix: "funding_vault_events",
     packageHashEnv: "FUNDING_VAULT_PACKAGE_HASH",
     contractName: "FundingVault",
     eventOffset: 1_000_000_000
   },
   {
-    cursorId: "repayment_escrow_events",
+    cursorId: "repayment_escrow_events_v5",
+    eventIdPrefix: "repayment_escrow_events",
     packageHashEnv: "REPAYMENT_ESCROW_PACKAGE_HASH",
     contractName: "RepaymentEscrow",
     eventOffset: 2_000_000_000
@@ -39,7 +42,7 @@ type ParsedLifecycleEvent = {
   eventIndex: number;
   eventName: string;
   invoiceIdHash?: `0x${string}`;
-  actorPublicKey?: string;
+  actorPublicKey?: string | undefined;
   payloadJson: string;
 };
 
@@ -60,7 +63,7 @@ export class CasperChainSyncService {
   async syncLatestEvents(): Promise<CasperSyncCursorRecord> {
     const { paymentStore } = await getPaymentRuntime();
     const invoices = await paymentStore.listInvoices();
-    const invoiceByHash = new Map(invoices.map((invoice) => [invoice.casperInvoiceIdHash ?? sha256Hex(invoice.id), invoice]));
+    const invoiceByHash = new Map(invoices.map((invoice) => [contractInvoiceIdHash(invoice.id), invoice]));
     const stateRootHash = (await this.rpcClient.getStateRootHashLatest()).stateRootHash.toHex();
     let totalLastEventIndex = -1;
 
@@ -72,6 +75,7 @@ export class CasperChainSyncService {
       const cursor =
         (await paymentStore.getCasperSyncCursor(source.cursorId)) ??
         ({ id: source.cursorId, lastEventIndex: -1, lastSyncedAt: new Date(0).toISOString() } satisfies CasperSyncCursorRecord);
+      let processedLastEventIndex = cursor.lastEventIndex;
 
       if (eventsLength > 0 && cursor.lastEventIndex < eventsLength - 1) {
         const eventsURef = await this.getEventsURef(contractHash, source.contractName);
@@ -79,11 +83,11 @@ export class CasperChainSyncService {
           const dictionaryItem = await this.rpcClient.getDictionaryItem(stateRootHash, eventsURef, String(index));
           const bytesHex =
             ((dictionaryItem.rawJSON as { stored_value?: { CLValue?: { bytes?: string } } })?.stored_value?.CLValue?.bytes ?? "");
-          if (!bytesHex) continue;
+          if (!bytesHex) break;
           const parsed = parseLifecycleEvent(bytesHex, source.eventOffset + index);
           const matchedInvoice = parsed.invoiceIdHash ? invoiceByHash.get(parsed.invoiceIdHash) : undefined;
           await paymentStore.upsertCasperLifecycleEvent({
-            id: `${source.cursorId}:${index}`,
+            id: `${source.eventIdPrefix}:${index}`,
             eventIndex: source.eventOffset + index,
             eventName: parsed.eventName,
             invoiceId: matchedInvoice?.id,
@@ -92,15 +96,16 @@ export class CasperChainSyncService {
             observedAt: new Date().toISOString(),
             syncSource: "dictionary"
           });
+          processedLastEventIndex = index;
         }
       }
 
       await paymentStore.upsertCasperSyncCursor({
         id: source.cursorId,
-        lastEventIndex: Math.max(cursor.lastEventIndex, eventsLength - 1),
+        lastEventIndex: processedLastEventIndex,
         lastSyncedAt: new Date().toISOString()
       });
-      totalLastEventIndex = Math.max(totalLastEventIndex, source.eventOffset + Math.max(eventsLength - 1, -1));
+      totalLastEventIndex = Math.max(totalLastEventIndex, source.eventOffset + processedLastEventIndex);
     }
 
     return paymentStore.upsertCasperSyncCursor({
@@ -114,9 +119,10 @@ export class CasperChainSyncService {
     const { paymentStore } = await getPaymentRuntime();
     await this.syncLatestEvents();
     const invoice = await paymentStore.requireInvoice(invoiceId);
-    const events = await paymentStore.listCasperLifecycleEventsByInvoice(invoiceId);
+    const events = (await paymentStore.listCasperLifecycleEventsByInvoice(invoiceId))
+      .filter((event) => isCanonicalRegistryEvent(event.eventIndex));
     const next: Partial<InvoicePaymentRecord> = {
-      casperInvoiceIdHash: invoice.casperInvoiceIdHash ?? sha256Hex(invoice.id),
+      casperInvoiceIdHash: contractInvoiceIdHash(invoice.id),
       casperInvoiceExists: false
     };
 
@@ -134,12 +140,14 @@ export class CasperChainSyncService {
           next.statusCasper = "Listed";
           break;
         case "InvoiceFunded":
-        case "InvoiceFundingRegistered":
-        case "VaultInvoiceFunded":
           next.statusCasper = "RepaymentPending";
           if (event.actorPublicKey) {
-            next.investorPublicKey = event.actorPublicKey;
-            next.investorAccount = toAccountHash(event.actorPublicKey);
+            if (event.actorPublicKey.startsWith("account-hash-")) {
+              next.investorAccount = event.actorPublicKey;
+            } else {
+              next.investorPublicKey = event.actorPublicKey;
+              next.investorAccount = toAccountHash(event.actorPublicKey);
+            }
           }
           break;
         case "SellerAdvanceCashedOut":
@@ -149,7 +157,6 @@ export class CasperChainSyncService {
           next.statusCasper = "Repaid";
           break;
         case "InvestorClaimed":
-        case "InvestorRepaymentClaimed":
         case "InvoiceSettled":
           next.statusCasper = "Settled";
           break;
@@ -240,12 +247,24 @@ export class CasperChainSyncService {
   }
 }
 
-function parseLifecycleEvent(bytesHex: string, eventIndex: number): ParsedLifecycleEvent {
+export function contractInvoiceIdHash(invoiceId: string): `0x${string}` {
+  return /^0x[0-9a-f]{64}$/i.test(invoiceId) ? invoiceId.toLowerCase() as `0x${string}` : sha256Hex(invoiceId);
+}
+
+export function isCanonicalRegistryEvent(eventIndex: number): boolean {
+  return eventIndex >= 0 && eventIndex < 1_000_000_000;
+}
+
+export function parseLifecycleEvent(bytesHex: string, eventIndex: number): ParsedLifecycleEvent {
   const bytes = Buffer.from(bytesHex, "hex");
-  const nameLength = bytes.readUInt32LE(0);
-  const name = sanitizeCasperEventName(bytes.subarray(4, 4 + nameLength).toString("utf8"));
+  if (bytes.length < 8) throw new Error("Odra event bytes are truncated");
+  const envelopeLength = bytes.readUInt32LE(0);
+  if (envelopeLength > bytes.length - 4) throw new Error("Odra event envelope length is invalid");
+  const nameLength = bytes.readUInt32LE(4);
+  if (nameLength > bytes.length - 8) throw new Error("Odra event name length is invalid");
+  const name = sanitizeCasperEventName(bytes.subarray(8, 8 + nameLength).toString("utf8"));
   const eventName = name.replace(/^event_/, "");
-  const payloadOffset = 4 + nameLength;
+  const payloadOffset = 8 + nameLength;
   const payload = bytes.subarray(payloadOffset);
   const payloadJson = JSON.stringify({ bytes: bytesHex });
 
@@ -255,7 +274,7 @@ function parseLifecycleEvent(bytesHex: string, eventIndex: number): ParsedLifecy
         eventIndex,
         eventName,
         invoiceIdHash: `0x${payload.subarray(0, 32).toString("hex")}`,
-        actorPublicKey: payload.subarray(32, 65).toString("hex"),
+        actorPublicKey: parseOdraAddress(payload, 32),
         payloadJson
       };
     case "InvoiceScored":
@@ -263,7 +282,7 @@ function parseLifecycleEvent(bytesHex: string, eventIndex: number): ParsedLifecy
         eventIndex,
         eventName,
         invoiceIdHash: `0x${payload.subarray(0, 32).toString("hex")}`,
-        actorPublicKey: payload.subarray(32, 65).toString("hex"),
+        actorPublicKey: parseOdraAddress(payload, 32),
         payloadJson
       };
     case "InvoiceListed":
@@ -282,7 +301,7 @@ function parseLifecycleEvent(bytesHex: string, eventIndex: number): ParsedLifecy
         eventIndex,
         eventName,
         invoiceIdHash: `0x${payload.subarray(0, 32).toString("hex")}`,
-        actorPublicKey: payload.subarray(65, 98).toString("hex"),
+        actorPublicKey: parseOdraAddress(payload, 65),
         payloadJson
       };
     case "InvoiceFunded":
@@ -290,7 +309,7 @@ function parseLifecycleEvent(bytesHex: string, eventIndex: number): ParsedLifecy
         eventIndex,
         eventName,
         invoiceIdHash: `0x${payload.subarray(0, 32).toString("hex")}`,
-        actorPublicKey: payload.subarray(32, 65).toString("hex"),
+        actorPublicKey: parseOdraAddress(payload, 32),
         payloadJson
       };
     case "SellerAdvanceCashedOut":
@@ -300,14 +319,14 @@ function parseLifecycleEvent(bytesHex: string, eventIndex: number): ParsedLifecy
         eventIndex,
         eventName,
         invoiceIdHash: `0x${payload.subarray(0, 32).toString("hex")}`,
-        actorPublicKey: payload.subarray(32, 65).toString("hex"),
+        actorPublicKey: parseOdraAddress(payload, 32),
         payloadJson
       };
     case "AgentReputationUpdated":
       return {
         eventIndex,
         eventName,
-        actorPublicKey: payload.subarray(0, 33).toString("hex"),
+        actorPublicKey: parseOdraAddress(payload, 0),
         payloadJson
       };
     default:
@@ -317,6 +336,15 @@ function parseLifecycleEvent(bytesHex: string, eventIndex: number): ParsedLifecy
         payloadJson
       };
   }
+}
+
+function parseOdraAddress(payload: Buffer, offset: number): string | undefined {
+  if (payload.length < offset + 33) return undefined;
+  const variant = payload[offset];
+  const hash = payload.subarray(offset + 1, offset + 33).toString("hex");
+  if (variant === 0) return `account-hash-${hash}`;
+  if (variant === 1) return `hash-${hash}`;
+  return undefined;
 }
 
 function sanitizeCasperEventName(value: string): string {

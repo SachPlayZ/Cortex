@@ -111,29 +111,24 @@ export class CasperSdkSettlementClient implements CasperSettlementClient {
       throw new Error("Casper rejected underpayment");
     }
 
-    const deployHash = await this.lifecycle.recordGatewayRepayment(
-      input.invoiceId,
-      input.gatewayPaymentHash,
-      input.paymentAttestationHash,
-      input.paidAmountUsdCents,
-      { keyPath: this.config.relayerPrivateKeyPath }
-    );
+    let deployHash = invoice.lastRepaymentDeployHash;
+    if (!deployHash) {
+      deployHash = await this.lifecycle.recordGatewayRepayment(
+        input.invoiceId,
+        input.gatewayPaymentHash,
+        input.paymentAttestationHash,
+        input.paidAmountUsdCents,
+        { keyPath: this.config.relayerPrivateKeyPath }
+      );
+      await this.store.updateInvoice(input.invoiceId, { lastRepaymentDeployHash: deployHash });
+    }
     await this.waitForTransaction(deployHash);
-    await this.noteSuccessfulReputation();
     await this.store.updateInvoice(input.invoiceId, {
       statusCasper: "Repaid",
       lastRepaymentDeployHash: deployHash,
       statusLastSyncedAt: new Date().toISOString()
     });
     return { deployHash };
-  }
-
-  private async noteSuccessfulReputation() {
-    const adminKeyPath = process.env.CASPER_ADMIN_PRIVATE_KEY_PATH;
-    const agentPublicKey = process.env.AGENT_PUBLIC_KEY;
-    if (!adminKeyPath || !agentPublicKey) return;
-    const deployHash = await this.lifecycle.noteSuccessfulRepayment(agentPublicKey, { keyPath: adminKeyPath });
-    await this.waitForTransaction(deployHash);
   }
 
   private async waitForTransaction(transactionHash: string, timeoutMs = 120_000): Promise<void> {
@@ -177,38 +172,33 @@ export class SettlementRelayer {
   ) {}
 
   async submit(job: RelayerJobRecord): Promise<RelayerJobRecord> {
-    const existing = await this.store.getRelayerJobByGatewayHash(job.gatewayPaymentHash);
-    const current = existing ?? (await this.store.upsertRelayerJob(job));
+    const current = await this.store.upsertRelayerJob(job);
     if (current.status === "confirmed") {
       return current;
     }
-
-    const nextAttempt = current.attempts + 1;
-    await this.store.updateRelayerJob(current.gatewayPaymentHash, {
-      attempts: nextAttempt,
-      status: "submitted"
-    });
+    const claimed = await this.store.claimRelayerJob(current.gatewayPaymentHash);
+    if (!claimed) return (await this.store.getRelayerJobByGatewayHash(current.gatewayPaymentHash)) ?? current;
 
     try {
       const { deployHash } = await this.casper.recordGatewayRepayment({
-        invoiceId: current.invoiceId,
-        gatewayPaymentHash: current.gatewayPaymentHash,
-        paidAmountUsdCents: current.paidAmountUsdCents,
-        paymentAttestationHash: current.paymentAttestationHash
+        invoiceId: claimed.invoiceId,
+        gatewayPaymentHash: claimed.gatewayPaymentHash,
+        paidAmountUsdCents: claimed.paidAmountUsdCents,
+        paymentAttestationHash: claimed.paymentAttestationHash
       });
-      await this.store.updateWebhook(current.webhookEventId, {
+      await this.store.updateWebhook(claimed.webhookEventId, {
         casperDeployHash: deployHash,
         processedAt: new Date().toISOString(),
         status: "relay_confirmed"
       });
-      return this.store.updateRelayerJob(current.gatewayPaymentHash, {
-        attempts: nextAttempt,
+      return this.store.updateRelayerJob(claimed.gatewayPaymentHash, {
+        attempts: claimed.attempts,
         status: "confirmed",
         casperDeployHash: deployHash
       });
     } catch (error) {
-      return this.store.updateRelayerJob(current.gatewayPaymentHash, {
-        attempts: nextAttempt,
+      return this.store.updateRelayerJob(claimed.gatewayPaymentHash, {
+        attempts: claimed.attempts,
         status: "retryable_failed",
         lastError: error instanceof Error ? error.message : "Unknown relayer failure"
       });

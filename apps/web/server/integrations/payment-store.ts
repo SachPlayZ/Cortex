@@ -128,6 +128,7 @@ export interface PaymentStore {
   getRelayerJobByGatewayHash(gatewayPaymentHash: `0x${string}`): Promise<RelayerJobRecord | undefined>;
   listRetryableRelayerJobs(limit?: number): Promise<RelayerJobRecord[]>;
   upsertRelayerJob(record: RelayerJobRecord): Promise<RelayerJobRecord>;
+  claimRelayerJob(gatewayPaymentHash: `0x${string}`): Promise<RelayerJobRecord | undefined>;
   updateRelayerJob(gatewayPaymentHash: `0x${string}`, patch: Partial<RelayerJobRecord>): Promise<RelayerJobRecord>;
   upsertLifecycleIntent(record: LifecycleIntentRecord): Promise<LifecycleIntentRecord>;
   getLifecycleIntent(intentId: string): Promise<LifecycleIntentRecord | undefined>;
@@ -213,6 +214,11 @@ export class InMemoryPaymentStore implements PaymentStore {
   }
 
   async recordWebhook(record: DodoWebhookRecord): Promise<DodoWebhookRecord> {
+    const existing =
+      (await this.getWebhookByEventId(record.eventId)) ??
+      (await this.getWebhookByPaymentId(record.paymentId)) ??
+      (await this.getWebhookByGatewayHash(record.gatewayPaymentHash as `0x${string}`));
+    if (existing) return existing;
     const copy = { ...record };
     this.webhooksByEventId.set(copy.eventId, copy);
     this.webhooksByPaymentId.set(copy.paymentId, copy);
@@ -245,8 +251,18 @@ export class InMemoryPaymentStore implements PaymentStore {
   }
 
   async upsertRelayerJob(record: RelayerJobRecord): Promise<RelayerJobRecord> {
+    const existing = await this.getRelayerJobByGatewayHash(record.gatewayPaymentHash);
+    if (existing) return existing;
     this.jobsByGatewayHash.set(record.gatewayPaymentHash, { ...record });
     return { ...record };
+  }
+
+  async claimRelayerJob(gatewayPaymentHash: `0x${string}`): Promise<RelayerJobRecord | undefined> {
+    const current = this.jobsByGatewayHash.get(gatewayPaymentHash);
+    if (!current || (current.status !== "queued" && current.status !== "retryable_failed")) return undefined;
+    const claimed = { ...current, status: "submitted" as const, attempts: current.attempts + 1 };
+    this.jobsByGatewayHash.set(gatewayPaymentHash, claimed);
+    return { ...claimed };
   }
 
   async updateRelayerJob(
@@ -633,11 +649,13 @@ export class PostgresPaymentStore implements PaymentStore {
 
   async recordWebhook(record: DodoWebhookRecord): Promise<DodoWebhookRecord> {
     await this.ensureSchema();
-    await this.pool.query(
+    const result = await this.pool.query<WebhookRow>(
       `insert into dodo_webhook_events (
         id, event_id, payment_id, gateway_payment_hash, invoice_id, raw_body_hash,
         signature_valid, amount_usd_cents, currency, processed_at, casper_deploy_hash, status
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      on conflict do nothing
+      returning *`,
       [
         record.id,
         record.eventId,
@@ -653,7 +671,13 @@ export class PostgresPaymentStore implements PaymentStore {
         record.status
       ]
     );
-    return record;
+    if (result.rows[0]) return webhookFromRow(result.rows[0]);
+    const existing =
+      (await this.getWebhookByEventId(record.eventId)) ??
+      (await this.getWebhookByPaymentId(record.paymentId)) ??
+      (await this.getWebhookByGatewayHash(record.gatewayPaymentHash as `0x${string}`));
+    if (!existing) throw new Error("Webhook conflict could not be reconciled");
+    return existing;
   }
 
   async updateWebhook(eventId: string, patch: Partial<DodoWebhookRecord>): Promise<DodoWebhookRecord> {
@@ -707,6 +731,7 @@ export class PostgresPaymentStore implements PaymentStore {
     const result = await this.pool.query<RelayerJobRow>(
       `select * from relayer_jobs
        where status in ('queued', 'retryable_failed')
+          or (status = 'submitted' and updated_at < now() - interval '2 minutes')
        order by updated_at asc
        limit $1`,
       [limit]
@@ -721,16 +746,7 @@ export class PostgresPaymentStore implements PaymentStore {
         id, webhook_event_id, invoice_id, gateway_payment_hash, payment_attestation_hash,
         paid_amount_usd_cents, status, attempts, casper_deploy_hash, last_error, updated_at
       ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now())
-      on conflict (gateway_payment_hash) do update set
-        webhook_event_id = excluded.webhook_event_id,
-        invoice_id = excluded.invoice_id,
-        payment_attestation_hash = excluded.payment_attestation_hash,
-        paid_amount_usd_cents = excluded.paid_amount_usd_cents,
-        status = excluded.status,
-        attempts = excluded.attempts,
-        casper_deploy_hash = excluded.casper_deploy_hash,
-        last_error = excluded.last_error,
-        updated_at = now()`,
+      on conflict (gateway_payment_hash) do nothing`,
       [
         record.id,
         record.webhookEventId,
@@ -751,6 +767,20 @@ export class PostgresPaymentStore implements PaymentStore {
     return saved;
   }
 
+  async claimRelayerJob(gatewayPaymentHash: `0x${string}`): Promise<RelayerJobRecord | undefined> {
+    await this.ensureSchema();
+    const result = await this.pool.query<RelayerJobRow>(
+      `update relayer_jobs
+       set status = 'submitted', attempts = attempts + 1, last_error = null, updated_at = now()
+       where gateway_payment_hash = $1
+         and (status in ('queued', 'retryable_failed')
+           or (status = 'submitted' and updated_at < now() - interval '2 minutes'))
+       returning *`,
+      [gatewayPaymentHash]
+    );
+    return result.rows[0] ? relayerJobFromRow(result.rows[0]) : undefined;
+  }
+
   async updateRelayerJob(
     gatewayPaymentHash: `0x${string}`,
     patch: Partial<RelayerJobRecord>
@@ -759,7 +789,26 @@ export class PostgresPaymentStore implements PaymentStore {
     if (!current) {
       throw new Error(`Relayer job not found: ${gatewayPaymentHash}`);
     }
-    return this.upsertRelayerJob({ ...current, ...patch, gatewayPaymentHash });
+    const next = { ...current, ...patch, gatewayPaymentHash };
+    await this.pool.query(
+      `update relayer_jobs set
+        webhook_event_id = $2, invoice_id = $3, payment_attestation_hash = $4,
+        paid_amount_usd_cents = $5, status = $6, attempts = $7,
+        casper_deploy_hash = $8, last_error = $9, updated_at = now()
+       where gateway_payment_hash = $1`,
+      [
+        gatewayPaymentHash,
+        next.webhookEventId,
+        next.invoiceId,
+        next.paymentAttestationHash,
+        next.paidAmountUsdCents,
+        next.status,
+        next.attempts,
+        next.casperDeployHash ?? null,
+        next.lastError ?? null
+      ]
+    );
+    return (await this.getRelayerJobByGatewayHash(gatewayPaymentHash)) as RelayerJobRecord;
   }
 
   private async getWebhook(column: "event_id" | "payment_id" | "gateway_payment_hash", value: string) {

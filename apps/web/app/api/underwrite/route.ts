@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import { loadServerEnv } from "../../../server/env";
 import { getPaymentRuntime } from "../../../server/payment-runtime";
 import { extractInvoiceTextWithLocalOcr } from "../../../server/integrations/invoice-ocr";
+import { contractInvoiceIdHash } from "../../../server/integrations/casper-chain-sync";
 
 loadServerEnv();
 
@@ -37,6 +38,7 @@ export async function POST(req: NextRequest) {
       const file = form.get("file");
       const wallet = form.get("sellerWallet");
       const publicKey = form.get("sellerPublicKey");
+      const textFallback = form.get("invoiceTextFallback");
       if (!wallet || typeof wallet !== "string") {
         return NextResponse.json({ error: "sellerWallet required" }, { status: 400 });
       }
@@ -47,7 +49,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "file required" }, { status: 400 });
       }
       evidence = await readInvoiceEvidence(file, { allowVisionFallback: Boolean(process.env.GROQ_API_KEY) });
-      invoiceText = evidence.invoiceText;
+      invoiceText = typeof textFallback === "string" && textFallback.trim() ? textFallback.trim() : evidence.invoiceText;
       sellerAccountHash = wallet;
       sellerPublicKey = publicKey || undefined;
     } else {
@@ -110,7 +112,7 @@ export async function POST(req: NextRequest) {
       title: result.parsed.invoice_number,
       sellerAccount: sellerAccountHash,
       sellerPublicKey,
-      casperInvoiceIdHash: sha256Hex(result.invoiceId),
+      casperInvoiceIdHash: contractInvoiceIdHash(result.invoiceId),
       invoiceHash: result.invoiceHash,
       originalCurrency: result.parsed.original_currency,
       originalAmountMinor: result.fx.original_amount_minor,

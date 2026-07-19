@@ -3,7 +3,9 @@ import { InvoiceLifecyclePanel } from "../../../components/invoice-lifecycle-pan
 import { PageShell } from "../../../components/page-shell";
 import { StatusPill } from "../../../components/status-pill";
 import { Badge } from "../../../components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "../../../components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../../components/ui/card";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../../../components/ui/empty";
 import { Separator } from "../../../components/ui/separator";
 import { expectedReturnPercent, formatUsd, investorYield } from "../../../lib/finance";
 import { CasperLifecycleService } from "../../../server/integrations/casper-lifecycle";
@@ -15,15 +17,16 @@ export default async function InvoicePage({ params }: { params: Promise<{ invoic
   const { invoiceId } = await params;
   const { paymentStore } = await getPaymentRuntime();
   const service = new CasperLifecycleService();
-  const invoice =
-    (await service.reconcileInvoice(invoiceId).catch(() => undefined)) ??
-    (await paymentStore.requireInvoice(invoiceId).catch(() => undefined));
+  let chainVerified = true;
+  const chainInvoice = await service.reconcileInvoice(invoiceId).catch(() => {
+    chainVerified = false;
+    return undefined;
+  });
+  const invoice = chainInvoice ?? (await paymentStore.requireInvoice(invoiceId).catch(() => undefined));
   if (!invoice) {
     return (
       <PageShell title="Invoice not found" description="No local or Casper-backed receivable matched this reference.">
-        <Card className="rounded-2xl border-white/10 bg-card/72">
-          <CardContent>Invoice not found.</CardContent>
-        </Card>
+        <Empty className="border"><EmptyHeader><EmptyMedia variant="icon"><FingerprintIcon /></EmptyMedia><EmptyTitle>Invoice not found</EmptyTitle><EmptyDescription>No local or Casper-backed record matched this reference.</EmptyDescription></EmptyHeader></Empty>
       </PageShell>
     );
   }
@@ -56,8 +59,14 @@ export default async function InvoicePage({ params }: { params: Promise<{ invoic
       description="Inspect financial terms, private-data boundaries, agent trace, and every Casper transition attached to this invoice."
       action={<StatusPill status={invoice.statusCasper} />}
     >
+      {!chainVerified ? (
+        <Alert variant="destructive">
+          <AlertTitle>Casper sync unavailable</AlertTitle>
+          <AlertDescription>Showing cached data. Financial actions will fail closed until Casper can be verified.</AlertDescription>
+        </Alert>
+      ) : null}
       <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-        <Card className="rounded-2xl border-white/10 bg-card/72">
+        <Card>
           <CardHeader>
             <ShieldCheckIcon className="text-primary" />
             <CardTitle className="text-3xl tracking-normal">Terms</CardTitle>
@@ -65,7 +74,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ invoic
           </CardHeader>
           <CardContent className="grid gap-3">
             {kvRows.map(([label, val]) => (
-              <div key={label} className="flex justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.035] p-3">
+              <div key={label} className="flex justify-between gap-4 rounded-lg border border-border bg-muted/50 p-3">
                 <span className="text-sm text-muted-foreground">{label}</span>
                 <strong className="min-w-0 break-all text-right text-sm text-foreground">{val}</strong>
               </div>
@@ -73,7 +82,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ invoic
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl border-white/10 bg-background/54">
+        <Card>
           <CardHeader>
             <FingerprintIcon className="text-primary" />
             <CardTitle className="text-3xl tracking-normal">Hashes and deploys</CardTitle>
@@ -105,7 +114,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ invoic
 
       <InvoiceLifecyclePanel invoice={invoice} />
 
-      <Card className="rounded-2xl border-white/10 bg-card/72">
+      <Card>
         <CardHeader>
           <BrainCircuitIcon className="text-primary" />
           <CardTitle className="text-3xl tracking-normal">Agent trace</CardTitle>
@@ -113,11 +122,9 @@ export default async function InvoicePage({ params }: { params: Promise<{ invoic
         </CardHeader>
         <CardContent className="grid gap-3">
           {traceSteps.map(([event, stepStatus], index) => (
-            <div key={event} className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.035] p-3">
+            <div key={event} className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/50 p-3">
               <div className="flex min-w-0 items-center gap-3">
-                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
-                  {index + 1}
-                </span>
+                <Badge variant="outline">{index + 1}</Badge>
                 <span className="truncate text-sm text-foreground">{event}</span>
               </div>
               <StatusPill status={stepStatus} />
@@ -131,7 +138,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ invoic
 
 function HashLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid gap-1 rounded-xl border border-white/10 bg-white/[0.035] p-3">
+    <div className="grid gap-1 rounded-lg border border-border bg-muted/50 p-3">
       <span className="text-xs text-muted-foreground">{label}</span>
       <span className="break-all font-mono text-xs leading-5 text-foreground">{value}</span>
     </div>

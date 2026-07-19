@@ -1,23 +1,19 @@
-import { cn } from "@/lib/utils";
+import { CheckCircle2Icon, CircleDashedIcon, Clock3Icon, XCircleIcon } from "lucide-react";
+import { Badge } from "./ui/badge";
 
 export function StatusPill({ status }: { status: string }) {
   const normalized = status.toLowerCase();
-  const isBad = normalized.includes("rejected") || normalized.includes("blocked") || normalized.includes("defaulted");
-  const isWarn = normalized.includes("pending");
-  const isNeutral = normalized.includes("skipped");
+  const isBad = normalized.includes("rejected") || normalized.includes("blocked") || normalized.includes("defaulted") || normalized.includes("failed");
+  const isPending = normalized.includes("pending") || normalized.includes("queued") || normalized.includes("waiting");
+  const isGood = ["done", "created", "scored", "listed", "funded", "repaid", "settled", "confirmed", "registered", "verified", "real"]
+    .some((value) => normalized.includes(value));
+  const Icon = isBad ? XCircleIcon : isPending ? Clock3Icon : isGood ? CheckCircle2Icon : CircleDashedIcon;
+  const variant = isBad ? "destructive" : isGood ? "default" : isPending ? "secondary" : "outline";
+
   return (
-    <span
-      role="status"
-      aria-live="polite"
-      className={cn(
-        "inline-flex w-fit items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold tracking-wide",
-        isBad && "bg-bad-dim text-bad",
-        isWarn && !isBad && "bg-warn-dim text-warn",
-        isNeutral && !isBad && !isWarn && "bg-panel-elevated text-ink-muted",
-        !isBad && !isWarn && !isNeutral && "bg-good-dim text-good"
-      )}
-    >
+    <Badge variant={variant} role="status" aria-live="polite">
+      <Icon data-icon="inline-start" />
       {status}
-    </span>
+    </Badge>
   );
 }
