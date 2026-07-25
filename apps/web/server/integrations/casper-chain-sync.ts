@@ -13,7 +13,6 @@ const require = createRequire(import.meta.url);
 const casperSdk = require("casper-js-sdk") as CasperSdk;
 
 const EVENT_CURSOR_ID = "casper_events";
-const BOOTSTRAP_STATUS_ID = "invoice_registry_bootstrap";
 const CONTRACT_SOURCES = [
   {
     cursorId: "invoice_registry_events_v5",
@@ -70,11 +69,13 @@ export class CasperChainSyncService {
     for (const source of CONTRACT_SOURCES) {
       const packageHash = process.env[source.packageHashEnv];
       if (!packageHash) continue;
+      const packageScope = stripContractPrefix(packageHash);
       const contractHash = await this.getContractHash(packageHash, source.contractName);
       const eventsLength = await this.getEventsLength(contractHash);
+      const cursorId = `${source.cursorId}:${packageScope}`;
       const cursor =
-        (await paymentStore.getCasperSyncCursor(source.cursorId)) ??
-        ({ id: source.cursorId, lastEventIndex: -1, lastSyncedAt: new Date(0).toISOString() } satisfies CasperSyncCursorRecord);
+        (await paymentStore.getCasperSyncCursor(cursorId)) ??
+        ({ id: cursorId, lastEventIndex: -1, lastSyncedAt: new Date(0).toISOString() } satisfies CasperSyncCursorRecord);
       let processedLastEventIndex = cursor.lastEventIndex;
 
       if (eventsLength > 0 && cursor.lastEventIndex < eventsLength - 1) {
@@ -87,7 +88,7 @@ export class CasperChainSyncService {
           const parsed = parseLifecycleEvent(bytesHex, source.eventOffset + index);
           const matchedInvoice = parsed.invoiceIdHash ? invoiceByHash.get(parsed.invoiceIdHash) : undefined;
           await paymentStore.upsertCasperLifecycleEvent({
-            id: `${source.eventIdPrefix}:${index}`,
+            id: `${source.eventIdPrefix}:${packageScope}:${index}`,
             eventIndex: source.eventOffset + index,
             eventName: parsed.eventName,
             invoiceId: matchedInvoice?.id,
@@ -101,7 +102,7 @@ export class CasperChainSyncService {
       }
 
       await paymentStore.upsertCasperSyncCursor({
-        id: source.cursorId,
+        id: cursorId,
         lastEventIndex: processedLastEventIndex,
         lastSyncedAt: new Date().toISOString()
       });
@@ -109,7 +110,7 @@ export class CasperChainSyncService {
     }
 
     return paymentStore.upsertCasperSyncCursor({
-      id: EVENT_CURSOR_ID,
+      id: `${EVENT_CURSOR_ID}:${casperDeploymentScope()}`,
       lastEventIndex: totalLastEventIndex,
       lastSyncedAt: new Date().toISOString()
     });
@@ -181,9 +182,10 @@ export class CasperChainSyncService {
 
   async getBootstrapStatus(): Promise<BootstrapStatusRecord> {
     const { paymentStore } = await getPaymentRuntime();
+    const statusId = bootstrapStatusId();
     return (
-      (await paymentStore.getBootstrapStatus(BOOTSTRAP_STATUS_ID)) ?? {
-        id: BOOTSTRAP_STATUS_ID,
+      (await paymentStore.getBootstrapStatus(statusId)) ?? {
+        id: statusId,
         lifecycleMode: hasCasperLifecycleConfig() ? "real" : "unavailable",
         agentRegistered: false,
         settlementRelayerRegistered: false,
@@ -199,7 +201,7 @@ export class CasperChainSyncService {
     return paymentStore.upsertBootstrapStatus({
       ...current,
       ...patch,
-      id: BOOTSTRAP_STATUS_ID,
+      id: bootstrapStatusId(),
       updatedAt: new Date().toISOString()
     });
   }
@@ -245,6 +247,20 @@ export class CasperChainSyncService {
     }
     return this.eventsURefPromises.get(cacheKey) as Promise<string>;
   }
+}
+
+export function bootstrapStatusId(): string {
+  return `invoice_registry_bootstrap:${stripContractPrefix(process.env.INVOICE_REGISTRY_PACKAGE_HASH ?? "unconfigured")}`;
+}
+
+export function casperDeploymentScope(): string {
+  return [
+    process.env.INVOICE_REGISTRY_PACKAGE_HASH,
+    process.env.FUNDING_VAULT_PACKAGE_HASH,
+    process.env.REPAYMENT_ESCROW_PACKAGE_HASH
+  ]
+    .map((value) => stripContractPrefix(value ?? "unconfigured"))
+    .join(":");
 }
 
 export function contractInvoiceIdHash(invoiceId: string): `0x${string}` {

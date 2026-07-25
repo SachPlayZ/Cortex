@@ -1,0 +1,26 @@
+last_updated = "2026-07-19T06:59:10Z"
+
+[[contracts]]
+name = "InvoiceRegistry"
+package_name = "InvoiceRegistry"
+package_hash = "hash-7e30a612ede51156f1b70942ea77942d1e5fe7d1f3cc164da6339643564a33b3"
+
+[[contracts]]
+name = "FundingVault"
+package_name = "FundingVault"
+package_hash = "hash-52d51866ddedabe0f322c6d088d35527d6e267b4470038dbdbd8ea6db1df4cf4"
+
+[[contracts]]
+name = "RepaymentEscrow"
+package_name = "RepaymentEscrow"
+package_hash = "hash-46d653a8d3a6ebd8ba0b6f748f915669d81983b09fb3093cd46bdf52da67ba1d"
+
+[[contracts]]
+name = "AgentReputation"
+package_name = "AgentReputation"
+package_hash = "hash-511922a77193f535472fb55f690548cde45dd5d1361501f6d51bc8bed2919964"
+
+[[contracts]]
+name = "MockUsd"
+package_name = "MockUsd"
+package_hash = "hash-250aba7e7cfbe02e2ced403eb285e1bec5585e39c7fba5e0b58678e3c5312805"

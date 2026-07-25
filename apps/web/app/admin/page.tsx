@@ -11,7 +11,7 @@ export const metadata = { title: "Relayer ops | Cortex" };
 export const dynamic = "force-dynamic";
 
 const ops = [
-  { title: "Casper bootstrap", body: "Registers the underwriting agent, settlement relayer, and optional vault liquidity.", Icon: KeyRoundIcon },
+  { title: "Casper bootstrap", body: "Registers the underwriting agent, settlement relayer, and mUSDC repayment reserve.", Icon: KeyRoundIcon },
   { title: "Casper sync", body: "Reconciles contract-backed invoice state and drains retryable relayer jobs.", Icon: RefreshCwIcon },
   { title: "Webhook safety", body: "Requires raw-body signature verification, amount checks, metadata checks, and idempotency.", Icon: RadioTowerIcon },
   { title: "Production guard", body: "Fails closed when secrets, Postgres, or relayer configuration are missing.", Icon: ShieldAlertIcon }

@@ -61,13 +61,14 @@ packages/shared
 
 contracts
   Odra/Casper contracts: InvoiceRegistry, FundingVault,
-  RepaymentEscrow, AgentReputation
+  RepaymentEscrow, AgentReputation, MockUsd
 ```
 
 ### Core trust model
 
 - Casper is the financial source of truth.
-- The deployed MVP routes create, score, list, fund, cashout, repayment, default, and claim through `InvoiceRegistry`; standalone vault/escrow packages are non-canonical modules.
+- `InvoiceRegistry` is canonical and atomically orchestrates `FundingVault`, `RepaymentEscrow`, `AgentReputation`, and `MockUsd`.
+- Investor funding requires an exact mUSDC allowance to `FundingVault`; Dodo-confirmed repayments reserve real mUSDC in `RepaymentEscrow`.
 - Backend records are cache/orchestration state.
 - Uploaded invoice data and private buyer details stay off-chain.
 - Only hashes and canonical financial fields are eligible for on-chain calls.
@@ -167,9 +168,11 @@ Required production values include:
 
 - `DATABASE_URL`
 - `DATABASE_SSL_REJECT_UNAUTHORIZED=true` unless your Postgres provider explicitly requires insecure TLS
-- `CASPER_NODE_RPC_URL`
-- `INVOICE_REGISTRY_PACKAGE_HASH`
-- `SETTLEMENT_RELAYER_PRIVATE_KEY_PATH`
+- `CASPER_NODE_RPC_URL` (server-only HTTP upstream; CSPR.click uses `/api/casper/rpc`)
+- all five contract package hashes from `.env.example`
+- `CASPER_ADMIN_PRIVATE_KEY_PEM` for Registry bootstrap
+- `CASPER_TREASURY_PRIVATE_KEY_PEM` for mUSDC reserve bootstrap
+- `SETTLEMENT_RELAYER_PRIVATE_KEY_PEM` on hosted/serverless deployments, or `SETTLEMENT_RELAYER_PRIVATE_KEY_PATH` locally
 - `DODO_PAYMENTS_API_KEY`
 - `DODO_PAYMENTS_WEBHOOK_SECRET`
 - `DODO_PRODUCT_ID`
@@ -179,7 +182,7 @@ Required production values include:
 
 Operational helpers:
 
-- `POST /api/admin/casper/bootstrap` registers agent/relayer and optionally deposits vault liquidity.
+- `POST /api/admin/casper/bootstrap` registers agent/relayer and optionally deposits an mUSDC repayment reserve.
 - `POST /api/admin/casper/sync` runs one Casper event sync pass and drains queued/retryable relayer jobs.
 - Server also runs the same sync/retry loop automatically every `BACKGROUND_SYNC_INTERVAL_MS` unless `DISABLE_BACKGROUND_JOBS=true`.
 - `pnpm sync:casper` calls the same endpoint for external cron/serverless setups.
@@ -275,28 +278,34 @@ Latest Casper testnet deployment:
 
 | Contract | Package hash | Explorer |
 | --- | --- | --- |
-| `InvoiceRegistry` | `hash-5fef146666891b7af8465e6030028f336aa2efe6e0e6d2ba520b5210877642c4` | [package](https://testnet.cspr.live/contract-package/5fef146666891b7af8465e6030028f336aa2efe6e0e6d2ba520b5210877642c4) |
-| `FundingVault` | `hash-756757ea8d976f7cdfbae9852fc653f3e0cab00dacd729cc6564943f4584982c` | [package](https://testnet.cspr.live/contract-package/756757ea8d976f7cdfbae9852fc653f3e0cab00dacd729cc6564943f4584982c) |
-| `RepaymentEscrow` | `hash-5ca1cb4499af61e4cec8e51ae105c005e1d11cc9ba5685e09c2c5d4c4dea448f` | [package](https://testnet.cspr.live/contract-package/5ca1cb4499af61e4cec8e51ae105c005e1d11cc9ba5685e09c2c5d4c4dea448f) |
-| `AgentReputation` | `hash-1f17052480f6cc3e639eccfb8b5b8aafa600cda610ddcb977f0f10534863984e` | [package](https://testnet.cspr.live/contract-package/1f17052480f6cc3e639eccfb8b5b8aafa600cda610ddcb977f0f10534863984e) |
+| `InvoiceRegistry` | `hash-e927cc878c81a521fc5e2bfc8dd163bf40071996703d656e1562fbe448f222b1` | [package](https://testnet.cspr.live/contract-package/e927cc878c81a521fc5e2bfc8dd163bf40071996703d656e1562fbe448f222b1) |
+| `FundingVault` | `hash-9fabd34fa621fa2e8c8d701e7c144b3dc410437ff302122f0144221b46a73ca3` | [package](https://testnet.cspr.live/contract-package/9fabd34fa621fa2e8c8d701e7c144b3dc410437ff302122f0144221b46a73ca3) |
+| `RepaymentEscrow` | `hash-115792ac89d97550d997761fac98106f27910657a55ea2ff26d0b9d70f4ced7f` | [package](https://testnet.cspr.live/contract-package/115792ac89d97550d997761fac98106f27910657a55ea2ff26d0b9d70f4ced7f) |
+| `AgentReputation` | `hash-b68085517c629331fbd0291b4ef8b7a92366e9c037eab7895a8766b2c5c7086b` | [package](https://testnet.cspr.live/contract-package/b68085517c629331fbd0291b4ef8b7a92366e9c037eab7895a8766b2c5c7086b) |
+| `MockUsd` | `hash-fe26bc8468bbed43d8b92e9d44d27fc93759a0ba4c65c60143cd8e0865a760bb` | [package](https://testnet.cspr.live/contract-package/fe26bc8468bbed43d8b92e9d44d27fc93759a0ba4c65c60143cd8e0865a760bb) |
 
 Deploy transactions:
 
 | Contract | Deploy tx | Explorer |
 | --- | --- | --- |
-| `InvoiceRegistry` | `2f47bfdb3641d8a2ba125942db1fced3855999c14f12eb50e2a5e093eedb45ce` | [tx](https://testnet.cspr.live/transaction/2f47bfdb3641d8a2ba125942db1fced3855999c14f12eb50e2a5e093eedb45ce) |
-| `FundingVault` | `41db2ddec6b90d30a0bf335ac74846ce4238e7f97a32fa2e5ed03d1049f4aaa7` | [tx](https://testnet.cspr.live/transaction/41db2ddec6b90d30a0bf335ac74846ce4238e7f97a32fa2e5ed03d1049f4aaa7) |
-| `RepaymentEscrow` | `7c63c5bbcf956ae5e9f2f00d55f6ca79e1dcefe74e2e2746152e09460819cc21` | [tx](https://testnet.cspr.live/transaction/7c63c5bbcf956ae5e9f2f00d55f6ca79e1dcefe74e2e2746152e09460819cc21) |
-| `AgentReputation` | `e87566ce909cfa039d0ece68d1f99db12ea2cb1c2e063499d58b44b89ae09076` | [tx](https://testnet.cspr.live/transaction/e87566ce909cfa039d0ece68d1f99db12ea2cb1c2e063499d58b44b89ae09076) |
+| `InvoiceRegistry` | `e3633835e5578d34c3e1cfaa58e84d9210cff876941510175fd25b924f471919` | [tx](https://testnet.cspr.live/transaction/e3633835e5578d34c3e1cfaa58e84d9210cff876941510175fd25b924f471919) |
+| `FundingVault` | `499eca7e4409ec649a4ba7e5e7f7a20633e3161ff1f092024b0efbf8304fc082` | [tx](https://testnet.cspr.live/transaction/499eca7e4409ec649a4ba7e5e7f7a20633e3161ff1f092024b0efbf8304fc082) |
+| `RepaymentEscrow` | `d254f403fd369779a25473b56364d4304ae6c3d1b7a5d6dcfc6046c30d0e0cd6` | [tx](https://testnet.cspr.live/transaction/d254f403fd369779a25473b56364d4304ae6c3d1b7a5d6dcfc6046c30d0e0cd6) |
+| `AgentReputation` | `d945e738ccaf5ab258e190c5b4e4a5dbb33d289d7f6340740e6d512af0eb9c98` | [tx](https://testnet.cspr.live/transaction/d945e738ccaf5ab258e190c5b4e4a5dbb33d289d7f6340740e6d512af0eb9c98) |
+| `MockUsd` | `adf868d88765de9ccc4959e911954b9c99beb0a3f8b3e089383bf7f90f4eca5d` | [tx](https://testnet.cspr.live/transaction/adf868d88765de9ccc4959e911954b9c99beb0a3f8b3e089383bf7f90f4eca5d) |
 
 Bootstrap registration transactions:
 
 | Action | Tx |
 | --- | --- |
-| Register agent on `InvoiceRegistry` | [88c249c0d8b637b1f8c952bf4d1620322d6cfd191e3decbaa1e9b3aca0c54906](https://testnet.cspr.live/transaction/88c249c0d8b637b1f8c952bf4d1620322d6cfd191e3decbaa1e9b3aca0c54906) |
-| Register agent on `AgentReputation` | [ea854a68785a1cdcc8d159fd09aae1115844710c843c84f98e3503fbd4d816bb](https://testnet.cspr.live/transaction/ea854a68785a1cdcc8d159fd09aae1115844710c843c84f98e3503fbd4d816bb) |
-| Register relayer on `InvoiceRegistry` | [5b54c37e65516c7c2453d9ccc1ca05245a0f7fbe0921a3cfc9a040dfc82d2891](https://testnet.cspr.live/transaction/5b54c37e65516c7c2453d9ccc1ca05245a0f7fbe0921a3cfc9a040dfc82d2891) |
-| Register relayer on `RepaymentEscrow` | [d0f3811c26f1419028bb96b0596ace91ff2f61e78df4e401e46fde0720595ec1](https://testnet.cspr.live/transaction/d0f3811c26f1419028bb96b0596ace91ff2f61e78df4e401e46fde0720595ec1) |
+| Link `FundingVault` to Registry | [f428e25b09dda86d0b4e4f07861ae4185a016ba9b1f630859f277062ab02771c](https://testnet.cspr.live/transaction/f428e25b09dda86d0b4e4f07861ae4185a016ba9b1f630859f277062ab02771c) |
+| Link `RepaymentEscrow` to Registry | [4cbb3afe583c29637869d9de683cac16eb5fbe04374e78fc09a6bebdaebeec93](https://testnet.cspr.live/transaction/4cbb3afe583c29637869d9de683cac16eb5fbe04374e78fc09a6bebdaebeec93) |
+| Link `AgentReputation` to Registry | [5a0bf70cc8f93de5709bc2488ec7ca8944ac967bad7c5607dfd3ac2635a4b436](https://testnet.cspr.live/transaction/5a0bf70cc8f93de5709bc2488ec7ca8944ac967bad7c5607dfd3ac2635a4b436) |
+| Register agent | [4f3a16313e51efc6fe57866a6cd95815cf71bbd0c96c6301c2bb2d955eee6b70](https://testnet.cspr.live/transaction/4f3a16313e51efc6fe57866a6cd95815cf71bbd0c96c6301c2bb2d955eee6b70) |
+| Register relayer | [0e1ee23b7ac6e59a171f65658ec6e63be562b327ffb68e41d030bdd4a8c5d7df](https://testnet.cspr.live/transaction/0e1ee23b7ac6e59a171f65658ec6e63be562b327ffb68e41d030bdd4a8c5d7df) |
+| Mint 1,000,000 mUSDC | [85fdf0c2176f8a7b70e8be0fd6bfb18703d41a45b723fd71225314867e0587e8](https://testnet.cspr.live/transaction/85fdf0c2176f8a7b70e8be0fd6bfb18703d41a45b723fd71225314867e0587e8) |
+| Fund 500,000 mUSDC repayment reserve | [5475615716f5426ec377b8c2c3eb5d4789c8856314e25edcb588786fadc7b9d7](https://testnet.cspr.live/transaction/5475615716f5426ec377b8c2c3eb5d4789c8856314e25edcb588786fadc7b9d7) |
+| Fund demo investor with 100,000 mUSDC | [f374a6fb97a41ab5a3a93614e630d5beeb2ee53510c7b019f77f3ddec8a8bef8](https://testnet.cspr.live/transaction/f374a6fb97a41ab5a3a93614e630d5beeb2ee53510c7b019f77f3ddec8a8bef8) |
 
 The contracts README also keeps the deployment block:
 

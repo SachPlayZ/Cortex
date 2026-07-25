@@ -14,3 +14,4 @@ contracts/wasm
 *.local
 dev.db
 *.sqlite
+.vercel

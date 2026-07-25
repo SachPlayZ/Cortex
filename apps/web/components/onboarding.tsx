@@ -5,29 +5,25 @@ import { useEffect, useState } from "react";
 import { ArrowRightIcon, LandmarkIcon, ReceiptTextIcon, ShieldCheckIcon } from "lucide-react";
 import { useCasperWallet } from "./casper-wallet";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
-import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./ui/card";
-import { Separator } from "./ui/separator";
 import { Spinner } from "./ui/spinner";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 
 type OnboardingRole = "seller" | "investor";
 
 const roleCopy = {
   seller: {
-    title: "Freelancer workspace",
-    body: "Upload evidence, review underwriting, mint and list the receivable, then create the client payment link after funding.",
+    eyebrow: "I’m a seller",
+    title: "Turn verified evidence into working capital.",
+    body: "Upload an invoice, review the agent-priced offer, then sign the receivable listing from the wallet that owns it.",
     cta: "Connect seller wallet",
-    Icon: ReceiptTextIcon,
-    checks: ["Own the invoice listing", "Sign mint and list", "Withdraw the funded advance"]
+    Icon: ReceiptTextIcon
   },
   investor: {
-    title: "Investor workspace",
-    body: "Inspect deterministic terms, fund one receivable, track verified repayment, and claim after Casper confirms settlement.",
+    eyebrow: "I’m an investor",
+    title: "Fund short-duration, legible receivables.",
+    body: "Inspect deterministic terms, fund one invoice, and claim only after Casper confirms verified repayment.",
     cta: "Connect investor wallet",
-    Icon: LandmarkIcon,
-    checks: ["Compare receivable terms", "Sign funding transaction", "Claim after repayment"]
+    Icon: LandmarkIcon
   }
 };
 
@@ -54,66 +50,44 @@ export function OnboardingPanel() {
   }
 
   return (
-    <Card>
-      <CardHeader className="grid gap-6 md:grid-cols-[1fr_auto] md:items-end">
-        <div className="flex max-w-3xl flex-col items-start gap-4">
-          <Badge variant="outline">Wallet-scoped access</Badge>
-          <CardTitle className="text-3xl md:text-4xl">Open the workspace that can sign the next action.</CardTitle>
-          <CardDescription className="max-w-2xl text-base leading-7">
-            Cortex never drops every user into the same dashboard. The connected account determines which financial actions are legal and relevant.
-          </CardDescription>
-        </div>
-        <Badge variant="secondary"><ShieldCheckIcon data-icon="inline-start" /> CSPR.click</Badge>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="seller">
-          <TabsList>
-            <TabsTrigger value="seller"><ReceiptTextIcon data-icon="inline-start" />Freelancer</TabsTrigger>
-            <TabsTrigger value="investor"><LandmarkIcon data-icon="inline-start" />Investor</TabsTrigger>
-          </TabsList>
-          {(Object.keys(roleCopy) as OnboardingRole[]).map((role) => {
-            const copy = roleCopy[role];
-            const Icon = copy.Icon;
-            const isPending = pendingRole === role;
-            return (
-              <TabsContent key={role} value={role} className="pt-6">
-                <div className="grid gap-8 lg:grid-cols-[1fr_0.9fr] lg:items-center">
-                  <div className="flex flex-col items-start gap-5">
-                    <div className="grid size-11 place-items-center rounded-lg bg-muted text-primary"><Icon /></div>
-                    <div>
-                      <h3 className="m-0 text-2xl font-semibold text-foreground">{copy.title}</h3>
-                      <p className="m-0 mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">{copy.body}</p>
-                    </div>
-                    <Button type="button" size="lg" onClick={() => void start(role)} disabled={pendingRole !== null}>
-                      {isPending ? <Spinner data-icon="inline-start" /> : <ArrowRightIcon data-icon="inline-start" />}
-                      {isPending ? "Connecting" : copy.cta}
-                    </Button>
-                  </div>
-                  <div className="flex flex-col gap-0 rounded-lg border border-border px-4">
-                    {copy.checks.map((check, index) => (
-                      <div key={check}>
-                        <div className="flex items-center justify-between gap-4 py-4">
-                          <span className="text-sm text-foreground">{check}</span>
-                          <Badge variant="secondary">Casper</Badge>
-                        </div>
-                        {index < copy.checks.length - 1 ? <Separator /> : null}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </TabsContent>
-            );
-          })}
-        </Tabs>
-      </CardContent>
+    <div className="border border-border bg-[#090d11]">
+      <div className="grid lg:grid-cols-2">
+        {(Object.keys(roleCopy) as OnboardingRole[]).map((role, index) => {
+          const copy = roleCopy[role];
+          const Icon = copy.Icon;
+          const isPending = pendingRole === role;
+          return (
+            <section key={role} className={`flex min-h-[22rem] flex-col items-start p-6 sm:p-9 ${index === 0 ? 'border-b border-border lg:border-b-0 lg:border-r' : ''}`}>
+              <div className={`grid size-12 place-items-center rounded-full border ${role === 'seller' ? 'border-primary text-primary' : 'border-good text-good'}`}>
+                <Icon className="size-5" />
+              </div>
+              <span className="mt-6 text-sm font-medium text-foreground">{copy.eyebrow}</span>
+              <h3 className="mb-0 mt-3 max-w-[20ch] text-2xl font-medium leading-tight tracking-[-0.03em] sm:text-3xl">{copy.title}</h3>
+              <p className="mb-0 mt-4 max-w-lg text-sm leading-6 text-muted-foreground">{copy.body}</p>
+              <Button
+                type="button"
+                size="lg"
+                variant={role === "seller" ? "default" : "secondary"}
+                className={`mt-auto w-full sm:w-auto ${role === 'investor' ? 'bg-good text-background hover:bg-good/80' : ''}`}
+                onClick={() => void start(role)}
+                disabled={pendingRole !== null}
+              >
+                {isPending ? <Spinner data-icon="inline-start" /> : <ArrowRightIcon data-icon="inline-start" />}
+                {isPending ? "Connecting" : copy.cta}
+              </Button>
+              <span className="mt-4 flex items-center gap-2 text-xs text-muted-foreground"><ShieldCheckIcon className="size-4 text-good" /> No private invoice data goes on-chain</span>
+            </section>
+          );
+        })}
+      </div>
       {error ? (
-        <CardFooter>
+        <div className="border-t border-border p-5">
           <Alert variant="destructive">
             <AlertTitle>Wallet connection failed</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
-        </CardFooter>
+        </div>
       ) : null}
-    </Card>
+    </div>
   );
 }

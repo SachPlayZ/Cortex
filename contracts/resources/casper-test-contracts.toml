@@ -1,21 +1,26 @@
-last_updated = "2026-07-07T19:49:13Z"
+last_updated = "2026-07-24T02:03:28Z"
 
 [[contracts]]
-name = "InvoiceRegistry"
-package_name = "InvoiceRegistry"
-package_hash = "hash-5fef146666891b7af8465e6030028f336aa2efe6e0e6d2ba520b5210877642c4"
+name = "MockUsd"
+package_name = "MockUsd"
+package_hash = "hash-fe26bc8468bbed43d8b92e9d44d27fc93759a0ba4c65c60143cd8e0865a760bb"
 
 [[contracts]]
 name = "FundingVault"
 package_name = "FundingVault"
-package_hash = "hash-756757ea8d976f7cdfbae9852fc653f3e0cab00dacd729cc6564943f4584982c"
+package_hash = "hash-9fabd34fa621fa2e8c8d701e7c144b3dc410437ff302122f0144221b46a73ca3"
 
 [[contracts]]
 name = "RepaymentEscrow"
 package_name = "RepaymentEscrow"
-package_hash = "hash-5ca1cb4499af61e4cec8e51ae105c005e1d11cc9ba5685e09c2c5d4c4dea448f"
+package_hash = "hash-115792ac89d97550d997761fac98106f27910657a55ea2ff26d0b9d70f4ced7f"
 
 [[contracts]]
 name = "AgentReputation"
 package_name = "AgentReputation"
-package_hash = "hash-1f17052480f6cc3e639eccfb8b5b8aafa600cda610ddcb977f0f10534863984e"
+package_hash = "hash-b68085517c629331fbd0291b4ef8b7a92366e9c037eab7895a8766b2c5c7086b"
+
+[[contracts]]
+name = "InvoiceRegistry"
+package_name = "InvoiceRegistry"
+package_hash = "hash-e927cc878c81a521fc5e2bfc8dd163bf40071996703d656e1562fbe448f222b1"

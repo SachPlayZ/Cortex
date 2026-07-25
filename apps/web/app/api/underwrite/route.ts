@@ -70,8 +70,6 @@ export async function POST(req: NextRequest) {
     }
 
     const groqApiKey = process.env.GROQ_API_KEY;
-    const groqModel = process.env.GROQ_MODEL;
-    const groqVisionModel = process.env.GROQ_VISION_MODEL;
     const fxProvider = new FrankfurterFxRateProvider();
 
     const { paymentStore } = await getPaymentRuntime();
@@ -94,8 +92,6 @@ export async function POST(req: NextRequest) {
       ...(evidence.fileName ? { invoiceFileName: evidence.fileName } : {}),
       ...(evidence.mimeType ? { invoiceMimeType: evidence.mimeType } : {}),
       ...(groqApiKey ? { groqApiKey } : {}),
-      ...(groqModel ? { groqModel } : {}),
-      ...(groqVisionModel ? { groqVisionModel } : {}),
       existingInvoiceHashes,
       existingSellerInvoiceNumbers
     });

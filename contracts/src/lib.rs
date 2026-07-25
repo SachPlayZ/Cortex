@@ -5,6 +5,7 @@ extern crate alloc;
 pub mod agent_reputation;
 pub mod funding_vault;
 pub mod invoice_registry;
+pub mod mock_usd;
 pub mod repayment_escrow;
 #[cfg(any(test, not(target_arch = "wasm32")))]
 pub mod state;
@@ -14,6 +15,7 @@ pub mod types;
 pub use agent_reputation::AgentReputation;
 pub use funding_vault::FundingVault;
 pub use invoice_registry::InvoiceRegistry;
+pub use mock_usd::MockUsd;
 pub use repayment_escrow::RepaymentEscrow;
 #[cfg(any(test, not(target_arch = "wasm32")))]
 pub use state::CortexContracts;

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isCanonicalRegistryEvent, parseLifecycleEvent } from "../server/integrations/casper-chain-sync";
+import {
+  bootstrapStatusId,
+  casperDeploymentScope,
+  isCanonicalRegistryEvent,
+  parseLifecycleEvent
+} from "../server/integrations/casper-chain-sync";
 
 describe("Casper Odra event decoding", () => {
   it("decodes the length-prefixed event name, invoice id, and account address", () => {
@@ -39,4 +44,32 @@ describe("Casper Odra event decoding", () => {
     expect(isCanonicalRegistryEvent(1_000_000_000)).toBe(false);
     expect(isCanonicalRegistryEvent(2_000_000_000)).toBe(false);
   });
+
+  it("scopes bootstrap state and event cursors to the deployed package hashes", () => {
+    const original = {
+      registry: process.env.INVOICE_REGISTRY_PACKAGE_HASH,
+      vault: process.env.FUNDING_VAULT_PACKAGE_HASH,
+      escrow: process.env.REPAYMENT_ESCROW_PACKAGE_HASH
+    };
+    process.env.INVOICE_REGISTRY_PACKAGE_HASH = "hash-registry";
+    process.env.FUNDING_VAULT_PACKAGE_HASH = "hash-vault";
+    process.env.REPAYMENT_ESCROW_PACKAGE_HASH = "hash-escrow";
+
+    try {
+      expect(bootstrapStatusId()).toBe("invoice_registry_bootstrap:registry");
+      expect(casperDeploymentScope()).toBe("registry:vault:escrow");
+    } finally {
+      restoreEnv("INVOICE_REGISTRY_PACKAGE_HASH", original.registry);
+      restoreEnv("FUNDING_VAULT_PACKAGE_HASH", original.vault);
+      restoreEnv("REPAYMENT_ESCROW_PACKAGE_HASH", original.escrow);
+    }
+  });
 });
+
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
+}

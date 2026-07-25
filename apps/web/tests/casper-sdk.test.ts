@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { CasperContractCaller, CasperLifecycleClient } from "../server/integrations/casper-sdk";
+import {
+  CasperContractCaller,
+  CasperLifecycleClient,
+  usdCentsToMockUsdUnits
+} from "../server/integrations/casper-sdk";
 
 const config = {
   rpcUrl: "https://node.testnet.cspr.cloud/rpc",
@@ -7,7 +11,8 @@ const config = {
   registryPackageHash: `hash-${"11".repeat(32)}`,
   fundingVaultPackageHash: `hash-${"22".repeat(32)}`,
   repaymentEscrowPackageHash: `hash-${"33".repeat(32)}`,
-  agentReputationPackageHash: `hash-${"44".repeat(32)}`
+  agentReputationPackageHash: `hash-${"44".repeat(32)}`,
+  mockUsdPackageHash: `hash-${"55".repeat(32)}`
 };
 
 describe("CasperLifecycleClient canonical calls", () => {
@@ -35,5 +40,32 @@ describe("CasperLifecycleClient canonical calls", () => {
       "record_gateway_repayment",
       "claim_repayment"
     ]);
+  });
+
+  it("approves the FundingVault for the exact 6-decimal mUSDC advance", () => {
+    const prepare = vi.fn().mockReturnValue({
+      entryPoint: "approve",
+      transaction: {},
+      transactionHash: "tx-approve"
+    });
+    const mockUsd = { prepare } as unknown as CasperContractCaller;
+    const client = new CasperLifecycleClient(config, { mockUsd });
+
+    client.prepareApproveFunding(
+      {
+        id: `0x${"55".repeat(32)}`,
+        invoiceHash: `0x${"66".repeat(32)}`,
+        repaymentAmountUsdCents: "100000",
+        advanceAmountUsdCents: "97000",
+        statusCasper: "Listed"
+      },
+      `02${"77".repeat(33)}`
+    );
+
+    const args = prepare.mock.calls[0]?.[2];
+    expect(prepare.mock.calls[0]?.[1]).toBe("approve");
+    expect(args.getByName("spender").toString()).toBe(`hash-${"22".repeat(32)}`);
+    expect(args.getByName("amount").toString()).toBe("970000000");
+    expect(usdCentsToMockUsdUnits("97000")).toBe("970000000");
   });
 });

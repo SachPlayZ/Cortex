@@ -74,7 +74,7 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
     }
     if (wallet.role === "investor") {
       if (invoice.statusCasper === "Listed") {
-        return [{ key: "fund", label: "Fund receivable", route: "fund", confirmRoute: "fund/confirm" }];
+        return [{ key: "fund", label: "Approve & fund", route: "fund", confirmRoute: "fund/confirm" }];
       }
       if (invoice.statusCasper === "Repaid" && invoice.investorAccount === wallet.accountHash) {
         return [{ key: "claim", label: "Claim repayment", route: "claim", confirmRoute: "claim/confirm" }];
@@ -88,33 +88,43 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
     setError("");
     setMessage("");
     try {
-      const prepareResponse = await fetch(`/api/invoices/${invoice.id}/${route}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          public_key_hex: wallet.publicKeyHex,
-          account_hash: wallet.accountHash
-        })
-      });
-      const preparedBody = (await prepareResponse.json()) as PreparedAction | { error?: string };
-      if (!prepareResponse.ok || !("transaction" in preparedBody)) {
-        throw new Error("error" in preparedBody ? preparedBody.error : `Unable to prepare ${label.toLowerCase()}`);
-      }
+      const actionRoutes =
+        route === "fund"
+          ? [
+              { route: "fund/approve", confirmRoute: "fund/approve/confirm", step: "mUSDC approval" },
+              { route, confirmRoute, step: "funding" }
+            ]
+          : [{ route, confirmRoute, step: label.toLowerCase() }];
 
-      const submittedHash = await wallet.sendTransaction(preparedBody.transaction);
-      const confirmResponse = await fetch(`/api/invoices/${invoice.id}/${confirmRoute}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          intent_id: preparedBody.intent_id,
-          deploy_hash: submittedHash
-        })
-      });
-      const confirmBody = (await confirmResponse.json()) as { invoice?: ReceivableView; error?: string };
-      if (!confirmResponse.ok) {
-        throw new Error(confirmBody.error ?? `Unable to confirm ${label.toLowerCase()}`);
+      for (const action of actionRoutes) {
+        const prepareResponse = await fetch(`/api/invoices/${invoice.id}/${action.route}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            public_key_hex: wallet.publicKeyHex,
+            account_hash: wallet.accountHash
+          })
+        });
+        const preparedBody = (await prepareResponse.json()) as PreparedAction | { error?: string };
+        if (!prepareResponse.ok || !("transaction" in preparedBody)) {
+          throw new Error("error" in preparedBody ? preparedBody.error : `Unable to prepare ${action.step}`);
+        }
+
+        const submittedHash = await wallet.sendTransaction(preparedBody.transaction);
+        const confirmResponse = await fetch(`/api/invoices/${invoice.id}/${action.confirmRoute}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            intent_id: preparedBody.intent_id,
+            deploy_hash: submittedHash
+          })
+        });
+        const confirmBody = (await confirmResponse.json()) as { invoice?: ReceivableView; error?: string };
+        if (!confirmResponse.ok) {
+          throw new Error(confirmBody.error ?? `Unable to confirm ${action.step}`);
+        }
+        if (confirmBody.invoice) setInvoice(confirmBody.invoice);
       }
-      if (confirmBody.invoice) setInvoice(confirmBody.invoice);
       setMessage(`${label} confirmed on Casper.`);
       router.refresh();
     } catch (err) {
@@ -205,7 +215,7 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
               Missing:
               {!health.bootstrap.agentRegistered ? " agent registration" : ""}
               {!health.bootstrap.settlementRelayerRegistered ? " settlement relayer registration" : ""}
-              {!health.bootstrap.vaultLiquidityDeposited ? " vault liquidity" : ""}
+              {!health.bootstrap.vaultLiquidityDeposited ? " mUSDC repayment reserve" : ""}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -246,6 +256,12 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
               : "Connect the seller or investor wallet to sign the next Casper transaction."}
           </p>
         )}
+
+        {actions.some((action) => action.key === "fund") ? (
+          <p className="m-0 text-xs leading-5 text-muted-foreground">
+            Funding requires two wallet signatures: approve the exact discounted mUSDC advance, then lock it in the FundingVault.
+          </p>
+        ) : null}
 
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="outline" size="sm" nativeButton={false} render={<a href={`/buyer/pay/${invoice.id}`} />}>

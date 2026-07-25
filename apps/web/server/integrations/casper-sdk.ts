@@ -21,12 +21,11 @@ export type CasperLifecycleConfig = {
   fundingVaultPackageHash: string;
   repaymentEscrowPackageHash: string;
   agentReputationPackageHash: string;
+  mockUsdPackageHash: string;
   paymentMotes?: number | undefined;
 };
 
-export type CasperSigner = {
-  keyPath: string;
-};
+export type CasperSigner = { keyPath: string } | { privateKeyPem: string };
 
 export type CasperPreparedTransaction = {
   entryPoint: string;
@@ -75,7 +74,7 @@ export class CasperContractCaller {
     args: InstanceType<CasperSdk["Args"]>,
     paymentMotes = this.paymentMotes
   ): Promise<string> {
-    const key = await loadSecp256k1PrivateKey(signer.keyPath);
+    const key = await loadSecp256k1PrivateKey(signer);
     const transaction = new casperSdk.ContractCallBuilder()
       .byPackageHash(stripHashPrefix(this.config.packageHash))
       .entryPoint(entryPoint)
@@ -133,17 +132,15 @@ export class CasperContractCaller {
 
 export class CasperLifecycleClient {
   private readonly registry: CasperContractCaller;
-  private readonly vault: CasperContractCaller;
   private readonly escrow: CasperContractCaller;
-  private readonly reputation: CasperContractCaller;
+  private readonly mockUsd: CasperContractCaller;
 
   constructor(
-    config: CasperLifecycleConfig,
+    private readonly config: CasperLifecycleConfig,
     callers: Partial<{
       registry: CasperContractCaller;
-      vault: CasperContractCaller;
       escrow: CasperContractCaller;
-      reputation: CasperContractCaller;
+      mockUsd: CasperContractCaller;
     }> = {}
   ) {
     const shared = {
@@ -155,17 +152,13 @@ export class CasperLifecycleClient {
       ...shared,
       packageHash: config.registryPackageHash
     });
-    this.vault = callers.vault ?? new CasperContractCaller({
-      ...shared,
-      packageHash: config.fundingVaultPackageHash
-    });
     this.escrow = callers.escrow ?? new CasperContractCaller({
       ...shared,
       packageHash: config.repaymentEscrowPackageHash
     });
-    this.reputation = callers.reputation ?? new CasperContractCaller({
+    this.mockUsd = callers.mockUsd ?? new CasperContractCaller({
       ...shared,
-      packageHash: config.agentReputationPackageHash
+      packageHash: config.mockUsdPackageHash
     });
   }
 
@@ -177,24 +170,8 @@ export class CasperLifecycleClient {
     );
   }
 
-  async registerReputationAgent(agentPublicKeyHex: string, admin: CasperSigner): Promise<string> {
-    return this.reputation.call(
-      admin,
-      "register_agent",
-      casperSdk.Args.fromMap({ agent: publicKeyAddressArg(agentPublicKeyHex) })
-    );
-  }
-
   async registerRegistrySettlementRelayer(relayerPublicKeyHex: string, admin: CasperSigner): Promise<string> {
     return this.registry.call(
-      admin,
-      "register_settlement_relayer",
-      casperSdk.Args.fromMap({ relayer: publicKeyAddressArg(relayerPublicKeyHex) })
-    );
-  }
-
-  async registerEscrowSettlementRelayer(relayerPublicKeyHex: string, admin: CasperSigner): Promise<string> {
-    return this.escrow.call(
       admin,
       "register_settlement_relayer",
       casperSdk.Args.fromMap({ relayer: publicKeyAddressArg(relayerPublicKeyHex) })
@@ -214,14 +191,6 @@ export class CasperLifecycleClient {
       agent,
       "post_risk_score",
       postRiskScoreArgs(invoice)
-    );
-  }
-
-  async noteInvoiceScored(agentPublicKeyHex: string, admin: CasperSigner): Promise<string> {
-    return this.reputation.call(
-      admin,
-      "note_invoice_scored",
-      casperSdk.Args.fromMap({ agent: publicKeyAddressArg(agentPublicKeyHex) })
     );
   }
 
@@ -248,8 +217,19 @@ export class CasperLifecycleClient {
     return this.registry.call(investor, "claim_repayment", casperSdk.Args.fromMap({ invoice_id: hashArg(invoiceId) }));
   }
 
-  async depositVaultLiquidity(amountUsdCents: string, admin: CasperSigner): Promise<string> {
-    return this.vault.call(
+  async approveEscrowLiquidity(amountUsdCents: string, admin: CasperSigner): Promise<string> {
+    return this.mockUsd.call(
+      admin,
+      "approve",
+      casperSdk.Args.fromMap({
+        spender: contractAddressArg(this.config.repaymentEscrowPackageHash),
+        amount: u256Arg(usdCentsToMockUsdUnits(amountUsdCents))
+      })
+    );
+  }
+
+  async depositEscrowLiquidity(amountUsdCents: string, admin: CasperSigner): Promise<string> {
+    return this.escrow.call(
       admin,
       "deposit_liquidity",
       casperSdk.Args.fromMap({
@@ -258,14 +238,13 @@ export class CasperLifecycleClient {
     );
   }
 
-  async armEscrowPosition(invoice: ReceivableView, investorPublicKeyHex: string, admin: CasperSigner): Promise<string> {
-    return this.escrow.call(
+  async transferMockUsd(toPublicKeyHex: string, amountUsdCents: string, admin: CasperSigner): Promise<string> {
+    return this.mockUsd.call(
       admin,
-      "arm_position",
+      "transfer",
       casperSdk.Args.fromMap({
-        invoice_id: hashArg(invoice.id),
-        investor: publicKeyAddressArg(investorPublicKeyHex),
-        expected_repayment_usd_cents: u256Arg(invoice.repaymentAmountUsdCents)
+        to: publicKeyAddressArg(toPublicKeyHex),
+        amount: u256Arg(usdCentsToMockUsdUnits(amountUsdCents))
       })
     );
   }
@@ -285,25 +264,6 @@ export class CasperLifecycleClient {
         gateway_payment_hash: hashArg(gatewayPaymentHash),
         webhook_event_hash: hashArg(webhookEventHash),
         paid_amount_usd_cents: u256Arg(paidAmountUsdCents)
-      })
-    );
-  }
-
-  async noteSuccessfulRepayment(agentPublicKeyHex: string, admin: CasperSigner): Promise<string> {
-    return this.reputation.call(
-      admin,
-      "note_successful_repayment",
-      casperSdk.Args.fromMap({ agent: publicKeyAddressArg(agentPublicKeyHex) })
-    );
-  }
-
-  async noteDefault(agentPublicKeyHex: string, riskTier: string | undefined, admin: CasperSigner): Promise<string> {
-    return this.reputation.call(
-      admin,
-      "note_default",
-      casperSdk.Args.fromMap({
-        agent: publicKeyAddressArg(agentPublicKeyHex),
-        risk_tier: casperSdk.CLValue.newCLUint8(riskTierToContractValue(riskTier))
       })
     );
   }
@@ -339,6 +299,17 @@ export class CasperLifecycleClient {
     );
   }
 
+  prepareApproveFunding(invoice: ReceivableView, investorPublicKeyHex: string): CasperPreparedTransaction {
+    return this.mockUsd.prepare(
+      investorPublicKeyHex,
+      "approve",
+      casperSdk.Args.fromMap({
+        spender: contractAddressArg(this.config.fundingVaultPackageHash),
+        amount: u256Arg(usdCentsToMockUsdUnits(invoice.advanceAmountUsdCents ?? "0"))
+      })
+    );
+  }
+
   prepareCashOutAdvance(invoiceId: string, sellerPublicKeyHex: string): CasperPreparedTransaction {
     return this.registry.prepare(
       sellerPublicKeyHex,
@@ -356,9 +327,18 @@ export class CasperLifecycleClient {
   }
 }
 
-export async function loadSecp256k1PrivateKey(path: string): Promise<ReturnType<CasperSdk["PrivateKey"]["fromPem"]>> {
-  const pem = await readFile(path, "utf8");
+export async function loadSecp256k1PrivateKey(source: string | CasperSigner): Promise<ReturnType<CasperSdk["PrivateKey"]["fromPem"]>> {
+  const pem =
+    typeof source === "string"
+      ? await readFile(source, "utf8")
+      : "privateKeyPem" in source
+        ? normalizePrivateKeyPem(source.privateKeyPem)
+        : await readFile(source.keyPath, "utf8");
   return casperSdk.PrivateKey.fromPem(pem, casperSdk.KeyAlgorithm.SECP256K1);
+}
+
+export function normalizePrivateKeyPem(value: string): string {
+  return value.trim().replace(/\\n/g, "\n");
 }
 
 export async function readPublicKeyHex(path: string): Promise<string> {
@@ -376,6 +356,12 @@ export function u256Arg(value: string) {
 
 export function u64Arg(value: number) {
   return casperSdk.CLValue.newCLUint64(value.toString());
+}
+
+export function usdCentsToMockUsdUnits(value: string): string {
+  const cents = BigInt(value);
+  if (cents <= 0n) throw new Error("mUSDC amount must be positive");
+  return (cents * 10_000n).toString();
 }
 
 export function toHash32Bytes(value: string): Uint8Array {
@@ -396,6 +382,11 @@ function publicKeyAddressArg(publicKeyHex: string) {
 
 function accountHashAddressArg(accountHash: string) {
   const key = casperSdk.Key.createByType(accountHash, casperSdk.KeyTypeID.Account);
+  return casperSdk.CLValue.newCLKey(key);
+}
+
+function contractAddressArg(packageHash: string) {
+  const key = casperSdk.Key.createByType(`hash-${stripHashPrefix(packageHash)}`, casperSdk.KeyTypeID.Hash);
   return casperSdk.CLValue.newCLKey(key);
 }
 

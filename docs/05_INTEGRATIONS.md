@@ -32,7 +32,7 @@ Implement all external/system integrations cleanly:
 
 ```bash
 CASPER_NETWORK=testnet
-CASPER_NODE_RPC_URL=https://node.testnet.cspr.cloud
+CASPER_NODE_RPC_URL=http://185.170.112.40:7777/rpc
 CSPR_CLOUD_REST_URL=https://api.testnet.cspr.cloud
 CSPR_CLOUD_STREAM_URL=wss://streaming.testnet.cspr.cloud
 CSPR_CLOUD_API_KEY=
@@ -41,8 +41,12 @@ FUNDING_VAULT_PACKAGE_HASH=
 REPAYMENT_ESCROW_PACKAGE_HASH=
 AGENT_REPUTATION_PACKAGE_HASH=
 MOCK_USD_PACKAGE_HASH=
+SETTLEMENT_RELAYER_PRIVATE_KEY_PEM=
+# Local fallback only:
 SETTLEMENT_RELAYER_PRIVATE_KEY_PATH=
 ```
+
+Keep `CASPER_NODE_RPC_URL` server-only. Hosted browsers and CSPR.click use the same-origin HTTPS `/api/casper/rpc` route, which validates and forwards JSON-RPC to the HTTP node.
 
 ### Transaction Types
 

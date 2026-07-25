@@ -2,6 +2,8 @@ import Groq from "groq-sdk";
 import { z } from "zod";
 import { ParsedInvoiceSchema, type ParsedInvoice } from "@cortex/shared";
 
+export const GROQ_INVOICE_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+
 const SYSTEM_PROMPT = `You are an invoice data extraction engine.
 Extract the following fields from the provided invoice evidence and return ONLY valid JSON.
 No markdown, no explanation, just the JSON object.
@@ -50,7 +52,7 @@ export async function groqParseInvoice(input: {
   now?: Date;
 }): Promise<ParsedInvoice> {
   const client = new Groq({ apiKey: input.apiKey });
-  const model = input.model ?? "llama-3.3-70b-versatile";
+  const model = input.model ?? GROQ_INVOICE_MODEL;
   const userText = input.imageDataUrl
     ? [
         "Extract invoice fields from the attached invoice image.",

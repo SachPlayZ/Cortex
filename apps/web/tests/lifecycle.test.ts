@@ -5,24 +5,22 @@ const store = new InMemoryPaymentStore();
 const fakeLifecycleClient = {
   prepareCreateInvoice: vi.fn(),
   prepareListInvoice: vi.fn(),
+  prepareApproveFunding: vi.fn(),
   prepareFundInvoice: vi.fn(),
   prepareCashOutAdvance: vi.fn(),
   prepareClaimRepayment: vi.fn(),
-  armEscrowPosition: vi.fn(),
-  noteInvoiceScored: vi.fn(),
   getTransactionReceipt: vi.fn(),
   waitForTransaction: vi.fn(),
   postRiskScore: vi.fn(),
   registerRegistryAgent: vi.fn(),
-  registerReputationAgent: vi.fn(),
   registerRegistrySettlementRelayer: vi.fn(),
-  registerEscrowSettlementRelayer: vi.fn(),
-  depositVaultLiquidity: vi.fn(),
-  noteSuccessfulRepayment: vi.fn()
+  approveEscrowLiquidity: vi.fn(),
+  depositEscrowLiquidity: vi.fn()
 };
 let lastConfirmedHash = "";
 
 vi.mock("../server/integrations/casper-chain-sync", () => ({
+  bootstrapStatusId: () => "invoice_registry_bootstrap",
   contractInvoiceIdHash: (invoiceId: string) => invoiceId,
   CasperChainSyncService: class {
     async getInvoiceState(invoiceId: string) {
@@ -102,12 +100,15 @@ describe("CasperLifecycleService", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     lastConfirmedHash = "";
-    process.env.INVOICE_REGISTRY_PACKAGE_HASH = "hash-5fef146666891b7af8465e6030028f336aa2efe6e0e6d2ba520b5210877642c4";
-    process.env.FUNDING_VAULT_PACKAGE_HASH = "hash-756757ea8d976f7cdfbae9852fc653f3e0cab00dacd729cc6564943f4584982c";
-    process.env.REPAYMENT_ESCROW_PACKAGE_HASH = "hash-5ca1cb4499af61e4cec8e51ae105c005e1d11cc9ba5685e09c2c5d4c4dea448f";
-    process.env.AGENT_REPUTATION_PACKAGE_HASH = "hash-1f17052480f6cc3e639eccfb8b5b8aafa600cda610ddcb977f0f10534863984e";
+    process.env.INVOICE_REGISTRY_PACKAGE_HASH = "hash-a6ad03381747184dc9e82d147bf6d9d26c37f49cd24639be16b3ba4ced20c78b";
+    process.env.FUNDING_VAULT_PACKAGE_HASH = "hash-06c1abe5d5dbe0f9d47ba275147e5ed2856aea808a4af68579676243afa0f825";
+    process.env.REPAYMENT_ESCROW_PACKAGE_HASH = "hash-abf95e40726ef5d5df2550dd1a913a88a11d74c180680f0a6a7d8392b7fba736";
+    process.env.AGENT_REPUTATION_PACKAGE_HASH = "hash-b0856f21f0d9466c5d94743196037dfca998599dc06c69191b9c62c6bc2269df";
+    process.env.MOCK_USD_PACKAGE_HASH = "hash-cfefad2ccc33015b106cc173c877f429c1e6f1ff5fea831a7a7fd493681a8ae6";
     process.env.AGENT_PRIVATE_KEY_PATH = "/tmp/agent_secret_key.pem";
     process.env.CASPER_ADMIN_PRIVATE_KEY_PATH = "/tmp/admin_secret_key.pem";
+    delete process.env.AGENT_PRIVATE_KEY_PEM;
+    delete process.env.CASPER_ADMIN_PRIVATE_KEY_PEM;
     process.env.AGENT_PUBLIC_KEY = "02agentpub";
     await store.upsertBootstrapStatus({
       id: "invoice_registry_bootstrap",
@@ -132,6 +133,11 @@ describe("CasperLifecycleService", () => {
       transaction: { payload: { fields: { args: { Named: [["invoice_id", { parsed: "inv_lifecycle_1" }]] } } } },
       transactionHash: "tx-fund"
     });
+    fakeLifecycleClient.prepareApproveFunding.mockReturnValue({
+      entryPoint: "approve",
+      transaction: { payload: { fields: { args: { Named: [["amount", { parsed: "970000000" }]] } } } },
+      transactionHash: "tx-approve"
+    });
     fakeLifecycleClient.prepareCashOutAdvance.mockReturnValue({
       entryPoint: "cash_out_advance",
       transaction: { payload: { fields: { args: { Named: [["invoice_id", { parsed: "inv_lifecycle_1" }]] } } } },
@@ -152,7 +158,11 @@ describe("CasperLifecycleService", () => {
               payload: {
                 initiator_addr: {
                   PublicKey:
-                    transactionHash === "tx-fund" || transactionHash === "tx-claim" ? "02investorpub" : "02sellerpub"
+                    transactionHash === "tx-approve" ||
+                    transactionHash === "tx-fund" ||
+                    transactionHash === "tx-claim"
+                      ? "02investorpub"
+                      : "02sellerpub"
                 },
                 fields: {
                   entry_point:
@@ -160,8 +170,10 @@ describe("CasperLifecycleService", () => {
                       ? "create_invoice"
                       : transactionHash === "tx-list"
                         ? "list_invoice"
-                        : transactionHash === "tx-fund"
-                          ? "fund_invoice"
+                        : transactionHash === "tx-approve"
+                          ? "approve"
+                          : transactionHash === "tx-fund"
+                            ? "fund_invoice"
                           : transactionHash === "tx-cashout"
                             ? "cash_out_advance"
                             : "claim_repayment",
@@ -169,13 +181,19 @@ describe("CasperLifecycleService", () => {
                     Stored: {
                       id: {
                         ByPackageHash: {
-                          addr: "5fef146666891b7af8465e6030028f336aa2efe6e0e6d2ba520b5210877642c4"
+                          addr:
+                            transactionHash === "tx-approve"
+                              ? "cfefad2ccc33015b106cc173c877f429c1e6f1ff5fea831a7a7fd493681a8ae6"
+                              : "a6ad03381747184dc9e82d147bf6d9d26c37f49cd24639be16b3ba4ced20c78b"
                         }
                       }
                     }
                   },
                   args: {
-                    Named: [["invoice_id", { parsed: "inv_lifecycle_1" }]]
+                    Named:
+                      transactionHash === "tx-approve"
+                        ? [["amount", { parsed: "970000000" }]]
+                        : [["invoice_id", { parsed: "inv_lifecycle_1" }]]
                   }
                 }
               }
@@ -185,8 +203,6 @@ describe("CasperLifecycleService", () => {
       };
     });
     fakeLifecycleClient.postRiskScore.mockResolvedValue("tx-score");
-    fakeLifecycleClient.noteInvoiceScored.mockResolvedValue("tx-reputation-score");
-    fakeLifecycleClient.armEscrowPosition.mockResolvedValue("tx-arm-escrow");
     fakeLifecycleClient.waitForTransaction.mockResolvedValue(undefined);
     await seedInvoice({
       statusCasper: "Scored",
@@ -205,7 +221,6 @@ describe("CasperLifecycleService", () => {
     expect(fakeLifecycleClient.waitForTransaction).toHaveBeenCalledWith("tx-create");
     expect(fakeLifecycleClient.waitForTransaction).toHaveBeenCalledWith("tx-score");
     expect(fakeLifecycleClient.postRiskScore).toHaveBeenCalled();
-    expect(fakeLifecycleClient.noteInvoiceScored).toHaveBeenCalledWith("02agentpub", { keyPath: "/tmp/admin_secret_key.pem" });
     expect(invoice.statusCasper).toBe("Created");
     expect(invoice.casperInvoiceExists).toBe(true);
     expect(invoice.createDeployHash).toBe("tx-create");
@@ -229,12 +244,20 @@ describe("CasperLifecycleService", () => {
     await store.updateInvoice("inv_lifecycle_1", { casperInvoiceExists: true, statusCasper: "Listed" });
 
     await expect(service.prepareFund("inv_lifecycle_1", "02sellerpub", "account-hash-seller")).rejects.toThrow("Seller cannot fund");
+    const approval = await service.prepareFundingApproval(
+      "inv_lifecycle_1",
+      "02investorpub",
+      "account-hash-investor"
+    );
+    expect(approval.transaction_hash).toBe("tx-approve");
+    await service.confirmFundingApproval("inv_lifecycle_1", approval.intent_id, "tx-approve");
+    expect(fakeLifecycleClient.waitForTransaction).toHaveBeenCalledWith("tx-approve");
+
     const prepared = await service.prepareFund("inv_lifecycle_1", "02investorpub", "account-hash-investor");
     expect(prepared.transaction_hash).toBe("tx-fund");
 
     const invoice = await service.confirmFund("inv_lifecycle_1", prepared.intent_id, "tx-fund");
     expect(fakeLifecycleClient.waitForTransaction).toHaveBeenCalledWith("tx-fund");
-    expect(fakeLifecycleClient.armEscrowPosition).not.toHaveBeenCalled();
     expect(invoice.statusCasper).toBe("RepaymentPending");
     expect(invoice.investorAccount).toBe("account-hash-investor");
     expect(invoice.fundDeployHash).toBe("tx-fund");

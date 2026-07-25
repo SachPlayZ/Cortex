@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import type { InvoiceStatus } from "@cortex/shared";
 import { type PaymentStore, type RelayerJobRecord } from "./payment-store";
-import { CasperLifecycleClient } from "./casper-sdk";
+import { CasperLifecycleClient, type CasperSigner } from "./casper-sdk";
 
 export type CasperInvoiceSnapshot = {
   invoiceId: string;
@@ -69,7 +69,8 @@ export type CasperSdkSettlementClientConfig = {
   registryPackageHash: string;
   repaymentEscrowPackageHash: string;
   agentReputationPackageHash: string;
-  relayerPrivateKeyPath: string;
+  mockUsdPackageHash: string;
+  relayerSigner: CasperSigner;
   paymentMotes?: number | undefined;
 };
 
@@ -89,6 +90,7 @@ export class CasperSdkSettlementClient implements CasperSettlementClient {
       fundingVaultPackageHash: process.env.FUNDING_VAULT_PACKAGE_HASH ?? "",
       repaymentEscrowPackageHash: config.repaymentEscrowPackageHash,
       agentReputationPackageHash: config.agentReputationPackageHash,
+      mockUsdPackageHash: config.mockUsdPackageHash,
       paymentMotes: config.paymentMotes
     });
   }
@@ -118,7 +120,7 @@ export class CasperSdkSettlementClient implements CasperSettlementClient {
         input.gatewayPaymentHash,
         input.paymentAttestationHash,
         input.paidAmountUsdCents,
-        { keyPath: this.config.relayerPrivateKeyPath }
+        this.config.relayerSigner
       );
       await this.store.updateInvoice(input.invoiceId, { lastRepaymentDeployHash: deployHash });
     }

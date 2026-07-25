@@ -2,7 +2,7 @@ import { hashJson, sha256Hex } from "@cortex/shared";
 import { buildAttestation } from "../attestation/index.js";
 import { FxNormalizer } from "../fx/index.js";
 import { parseInvoiceText } from "../parser/index.js";
-import { groqParseInvoice } from "../parser/groq-parser.js";
+import { GROQ_INVOICE_MODEL, groqParseInvoice } from "../parser/groq-parser.js";
 import { priceRisk } from "../risk/index.js";
 import { verifyInvoice } from "../verification/index.js";
 import type { FxRateProvider } from "../fx/index.js";
@@ -17,8 +17,6 @@ export async function runUnderwriting(input: {
   invoiceHash?: `0x${string}`;
   evidenceHash?: `0x${string}`;
   groqApiKey?: string;
-  groqModel?: string;
-  groqVisionModel?: string;
   existingInvoiceHashes?: ReadonlySet<string>;
   existingSellerInvoiceNumbers?: ReadonlySet<string>;
   now?: Date;
@@ -27,9 +25,6 @@ export async function runUnderwriting(input: {
   if (input.invoiceImageDataUrl && !input.groqApiKey) {
     throw new Error("Image invoice uploads require GROQ_API_KEY so the parser can use vision extraction");
   }
-  const groqModel = input.invoiceImageDataUrl
-    ? input.groqVisionModel ?? input.groqModel ?? "meta-llama/llama-4-scout-17b-16e-instruct"
-    : input.groqModel;
   const parsed = input.groqApiKey
     ? await groqParseInvoice({
         invoiceText: input.invoiceText,
@@ -37,7 +32,7 @@ export async function runUnderwriting(input: {
         ...(input.invoiceFileName ? { fileName: input.invoiceFileName } : {}),
         ...(input.invoiceMimeType ? { mimeType: input.invoiceMimeType } : {}),
         apiKey: input.groqApiKey,
-        ...(groqModel ? { model: groqModel } : {}),
+        model: GROQ_INVOICE_MODEL,
         now
       })
     : parseInvoiceText({ invoiceText: input.invoiceText, now });
@@ -83,7 +78,7 @@ export async function runUnderwriting(input: {
     verification,
     pricing,
     createdAt: now.toISOString(),
-    model: input.groqApiKey ? `groq/${groqModel ?? "llama-3.3-70b-versatile"}` : "deterministic-v1"
+    model: input.groqApiKey ? `groq/${GROQ_INVOICE_MODEL}` : "deterministic-v1"
   });
 
   return {

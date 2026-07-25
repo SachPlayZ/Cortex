@@ -70,8 +70,6 @@ const CSPRCLICK_UI_CONTAINER_ID = "csprclick-ui";
 const CSPRCLICK_SCRIPT_SRC =
   process.env.NEXT_PUBLIC_CSPRCLICK_SCRIPT_SRC ?? "https://cdn.cspr.click/ui/v1.12.0/csprclick-client-1.12.0.js";
 const CSPRCLICK_CHAIN_NAME = process.env.NEXT_PUBLIC_CASPER_CHAIN_NAME ?? "casper-test";
-const CSPRCLICK_NODE_RPC_URL =
-  process.env.NEXT_PUBLIC_CASPER_NODE_RPC_URL ?? "https://node.testnet.cspr.cloud/rpc";
 
 const CasperWalletContext = createContext<CasperWalletState | undefined>(undefined);
 
@@ -156,7 +154,7 @@ export function CasperWalletProvider({ children }: { children: ReactNode }) {
       appName: "Cortex",
       appId: process.env.NEXT_PUBLIC_CSPRCLICK_APP_ID ?? "csprclick-template",
       chainName: CSPRCLICK_CHAIN_NAME,
-      casperNode: CSPRCLICK_NODE_RPC_URL,
+      casperNode: new URL("/api/casper/rpc", window.location.origin).toString(),
       contentMode: "iframe",
       providers: ["casper-wallet", "ledger", "walletconnect", "metamask-snap"]
     };

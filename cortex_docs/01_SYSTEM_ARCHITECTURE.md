@@ -346,15 +346,13 @@ Dodo webhook → verify → settlement relayer signs Casper transaction → on-c
 
 ### MVP
 
-Use a mock `cUSD` ledger or native testnet CSPR with USD-cents accounting.
+Use the deployed 6-decimal `MockUsd` token with USD-cents accounting.
 
-Preferred MVP:
-
-- On-chain accounting stores USD cents.
-- Funding uses testnet CSPR or mock cUSD.
+- On-chain accounting stores USD cents and converts with `token_units = usd_cents * 10_000`.
+- Investor funding is pulled into `FundingVault` after an exact allowance.
 - Dodo repayment uses test-mode USD checkout.
 - Settlement relayer records proof of off-chain USD repayment.
-- Investor claim releases escrowed repayment equivalent from a test treasury or mock token.
+- Investor claim releases reserved mUSDC from `RepaymentEscrow`.
 
 ### V2
 

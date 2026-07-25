@@ -1,3 +1,8 @@
+use crate::{
+    agent_reputation::AgentReputationContractRef,
+    funding_vault::FundingVaultContractRef,
+    repayment_escrow::RepaymentEscrowContractRef,
+};
 use odra::{casper_types::U256, prelude::*};
 
 pub type Hash32 = [u8; 32];
@@ -145,12 +150,6 @@ pub struct InvoiceFunded {
 }
 
 #[odra::event]
-pub struct VaultLiquidityDeposited {
-    pub funder: Address,
-    pub amount_usd_cents: U256,
-}
-
-#[odra::event]
 pub struct SellerAdvanceCashedOut {
     pub invoice_id: Hash32,
     pub seller: Address,
@@ -189,6 +188,9 @@ pub struct AgentReputationUpdated {
 #[odra::module]
 pub struct InvoiceRegistry {
     admin: Var<Address>,
+    funding_vault: External<FundingVaultContractRef>,
+    repayment_escrow: External<RepaymentEscrowContractRef>,
+    agent_reputation: External<AgentReputationContractRef>,
     minimum_due_window: Var<u64>,
     grace_period: Var<u64>,
     invoices: Mapping<Hash32, Invoice>,
@@ -206,8 +208,16 @@ pub struct InvoiceRegistry {
 
 #[odra::module]
 impl InvoiceRegistry {
-    pub fn init(&mut self) {
+    pub fn init(
+        &mut self,
+        funding_vault: Address,
+        repayment_escrow: Address,
+        agent_reputation: Address,
+    ) {
         self.admin.set(self.env().caller());
+        self.funding_vault.set(funding_vault);
+        self.repayment_escrow.set(repayment_escrow);
+        self.agent_reputation.set(agent_reputation);
         self.minimum_due_window.set(1);
         self.grace_period.set(86_400);
         self.vault_liquidity_usd_cents.set(U256::from(0u8));
@@ -216,6 +226,7 @@ impl InvoiceRegistry {
 
     pub fn register_agent(&mut self, agent: Address) {
         self.require_admin();
+        self.agent_reputation.register_agent(agent.clone());
         self.registered_agents.set(&agent, true);
         if self.agent_profiles.get(&agent).is_none() {
             self.agent_profiles.set(
@@ -236,19 +247,6 @@ impl InvoiceRegistry {
     pub fn register_settlement_relayer(&mut self, relayer: Address) {
         self.require_admin();
         self.settlement_relayers.set(&relayer, true);
-    }
-
-    pub fn deposit_vault_liquidity(&mut self, amount_usd_cents: U256) {
-        self.require_admin();
-        if amount_usd_cents == U256::from(0u8) {
-            self.revert(CortexRevert::InvalidAmount);
-        }
-        let next = self.vault_liquidity_usd_cents.get_or_default() + amount_usd_cents;
-        self.vault_liquidity_usd_cents.set(next);
-        self.env().emit_event(VaultLiquidityDeposited {
-            funder: self.env().caller(),
-            amount_usd_cents,
-        });
     }
 
     pub fn create_invoice(
@@ -360,6 +358,7 @@ impl InvoiceRegistry {
         };
         self.invoices.set(&invoice_id, invoice);
         self.invoice_agent.set(&invoice_id, agent.clone());
+        self.agent_reputation.note_invoice_scored(agent.clone());
         self.bump_invoices_scored(&agent);
         self.env().emit_event(InvoiceScored {
             invoice_id,
@@ -405,6 +404,18 @@ impl InvoiceRegistry {
             self.revert(CortexRevert::InvalidAmount);
         }
 
+        self.funding_vault.fund_invoice(
+            invoice_id,
+            invoice.seller.clone(),
+            investor.clone(),
+            funded_amount_usd_cents,
+            invoice.repayment_amount_usd_cents,
+        );
+        self.repayment_escrow.arm_position(
+            invoice_id,
+            investor.clone(),
+            invoice.repayment_amount_usd_cents,
+        );
         invoice.investor = Some(investor.clone());
         invoice.status = InvoiceStatus::RepaymentPending;
         invoice.funded_at = Some(self.now());
@@ -446,6 +457,8 @@ impl InvoiceRegistry {
             self.revert(CortexRevert::VaultInsufficientLiquidity);
         }
 
+        self.funding_vault
+            .cash_out_advance(invoice_id, seller.clone());
         self.vault_liquidity_usd_cents
             .set(available - invoice.advance_amount_usd_cents);
         invoice.seller_advance_claimed = true;
@@ -484,10 +497,16 @@ impl InvoiceRegistry {
             self.revert(CortexRevert::Underpayment);
         }
 
+        self.repayment_escrow.record_gateway_repayment(
+            invoice_id,
+            gateway_payment_hash,
+            paid_amount_usd_cents,
+        );
         invoice.status = InvoiceStatus::Repaid;
         invoice.repaid_at = Some(self.now());
         self.escrow_liquidity_usd_cents.set(
-            self.escrow_liquidity_usd_cents.get_or_default() + paid_amount_usd_cents,
+            self.escrow_liquidity_usd_cents.get_or_default()
+                + invoice.repayment_amount_usd_cents,
         );
         self.gateway_payment_used.set(&gateway_payment_hash, true);
         self.repayments.set(
@@ -537,6 +556,8 @@ impl InvoiceRegistry {
         {
             self.revert(CortexRevert::EscrowInsufficientLiquidity);
         }
+        self.repayment_escrow
+            .claim_repayment(invoice_id, claimant.clone());
         self.escrow_liquidity_usd_cents.set(
             self.escrow_liquidity_usd_cents.get_or_default()
                 - position.expected_repayment_usd_cents,
@@ -568,6 +589,8 @@ impl InvoiceRegistry {
         if self.now() <= invoice.due_timestamp + self.grace_period.get_or_default() {
             self.revert(CortexRevert::DefaultNotAllowed);
         }
+        self.repayment_escrow
+            .release_defaulted_position(invoice_id);
         invoice.status = InvoiceStatus::Defaulted;
         self.invoices.set(&invoice_id, invoice);
         self.update_agent_reputation(&invoice_id, false);
@@ -631,9 +654,13 @@ impl InvoiceRegistry {
             .get(&agent)
             .unwrap_or_revert_with(self, CortexRevert::UnauthorizedAgent);
         if success {
+            self.agent_reputation
+                .note_successful_repayment(agent.clone());
             profile.successful_repayments += 1;
             profile.reputation_score = (profile.reputation_score + 20).min(MAX_REPUTATION);
         } else {
+            self.agent_reputation
+                .note_default(agent.clone(), invoice.risk_tier == RiskTier::Low);
             profile.defaults += 1;
             let slash = if invoice.risk_tier == RiskTier::Low {
                 profile.low_risk_defaults += 1;
@@ -660,16 +687,94 @@ impl InvoiceRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        agent_reputation::{AgentReputation, AgentReputationHostRef},
+        funding_vault::{FundingVault, FundingVaultHostRef, FundingVaultInitArgs},
+        mock_usd::{usd_cents_to_token_units, MockUsd, MockUsdHostRef},
+        repayment_escrow::{
+            RepaymentEscrow, RepaymentEscrowHostRef, RepaymentEscrowInitArgs,
+        },
+    };
     use odra::host::{Deployer, NoArgs};
 
     fn h(value: u8) -> Hash32 {
         [value; 32]
     }
 
-    fn deploy() -> (odra::host::HostEnv, InvoiceRegistryHostRef) {
+    fn deploy_with_reserve(reserve_usd_cents: u64) -> (
+        odra::host::HostEnv,
+        InvoiceRegistryHostRef,
+        MockUsdHostRef,
+        FundingVaultHostRef,
+        RepaymentEscrowHostRef,
+        AgentReputationHostRef,
+    ) {
         let env = odra_test::env();
-        let contract = InvoiceRegistry::deploy(&env, NoArgs);
-        (env, contract)
+        let admin = env.get_account(0);
+        let investor = env.get_account(3);
+        let mut token = MockUsd::deploy(&env, NoArgs);
+        let mut vault = FundingVault::deploy(
+            &env,
+            FundingVaultInitArgs {
+                mock_usd: token.address(),
+            },
+        );
+        let mut escrow = RepaymentEscrow::deploy(
+            &env,
+            RepaymentEscrowInitArgs {
+                mock_usd: token.address(),
+            },
+        );
+        let mut reputation = AgentReputation::deploy(&env, NoArgs);
+        let contract = InvoiceRegistry::deploy(
+            &env,
+            InvoiceRegistryInitArgs {
+                funding_vault: vault.address(),
+                repayment_escrow: escrow.address(),
+                agent_reputation: reputation.address(),
+            },
+        );
+
+        env.set_caller(admin.clone());
+        vault.set_registry(contract.address());
+        escrow.set_registry(contract.address());
+        reputation.set_registry(contract.address());
+        token.mint(
+            investor.clone(),
+            usd_cents_to_token_units(U256::from(194_000u64)),
+        );
+        if reserve_usd_cents > 0 {
+            token.mint(
+                admin.clone(),
+                usd_cents_to_token_units(U256::from(reserve_usd_cents)),
+            );
+        }
+        env.set_caller(investor);
+        token.approve(
+            vault.address(),
+            usd_cents_to_token_units(U256::from(194_000u64)),
+        );
+        env.set_caller(admin);
+        if reserve_usd_cents > 0 {
+            token.approve(
+                escrow.address(),
+                usd_cents_to_token_units(U256::from(reserve_usd_cents)),
+            );
+            escrow.deposit_liquidity(U256::from(reserve_usd_cents));
+        }
+
+        (env, contract, token, vault, escrow, reputation)
+    }
+
+    fn deploy() -> (
+        odra::host::HostEnv,
+        InvoiceRegistryHostRef,
+        MockUsdHostRef,
+        FundingVaultHostRef,
+        RepaymentEscrowHostRef,
+        AgentReputationHostRef,
+    ) {
+        deploy_with_reserve(200_000)
     }
 
     fn score(contract: &mut InvoiceRegistryHostRef, invoice_id: Hash32) {
@@ -687,7 +792,7 @@ mod tests {
 
     #[test]
     fn odra_lifecycle_happy_path() {
-        let (env, mut contract) = deploy();
+        let (env, mut contract, token, vault, escrow, reputation) = deploy();
         let admin = env.get_account(0);
         let seller = env.get_account(1);
         let agent = env.get_account(2);
@@ -718,6 +823,9 @@ mod tests {
         env.set_caller(investor.clone());
         contract.fund_invoice(h(1), U256::from(97_000u64));
 
+        env.set_caller(seller.clone());
+        contract.cash_out_advance(h(1));
+
         env.set_caller(relayer.clone());
         contract.record_gateway_repayment(h(1), h(10), h(11), U256::from(100_000u64));
 
@@ -732,11 +840,32 @@ mod tests {
             contract.get_agent_profile(agent).unwrap().reputation_score,
             520
         );
+        assert_eq!(
+            token.balance_of(seller),
+            usd_cents_to_token_units(U256::from(97_000u64))
+        );
+        assert_eq!(
+            token.balance_of(investor),
+            usd_cents_to_token_units(U256::from(197_000u64))
+        );
+        assert_eq!(vault.get_liquidity_usd_cents(), U256::from(0u8));
+        assert_eq!(
+            escrow.get_liquidity_usd_cents(),
+            U256::from(100_000u64)
+        );
+        assert_eq!(
+            escrow.get_reserved_liquidity_usd_cents(),
+            U256::from(0u8)
+        );
+        assert_eq!(
+            reputation.get_agent_profile(env.get_account(2)).unwrap().reputation_score,
+            520
+        );
     }
 
     #[test]
     fn odra_rejects_duplicate_payment_hash() {
-        let (env, mut contract) = deploy();
+        let (env, mut contract, _, _, _, _) = deploy();
         let admin = env.get_account(0);
         let seller = env.get_account(1);
         let agent = env.get_account(2);
@@ -786,5 +915,103 @@ mod tests {
         assert!(contract
             .try_record_gateway_repayment(h(21), h(10), h(12), U256::from(100_000u64))
             .is_err());
+    }
+
+    #[test]
+    fn odra_requires_investor_token_allowance_before_funding() {
+        let (env, mut contract, mut token, vault, _, _) = deploy();
+        let admin = env.get_account(0);
+        let seller = env.get_account(1);
+        let agent = env.get_account(2);
+        let investor = env.get_account(3);
+
+        env.set_caller(admin);
+        contract.register_agent(agent.clone());
+        env.set_caller(seller.clone());
+        contract.create_invoice(
+            h(1),
+            h(2),
+            h(3),
+            h(4),
+            h(5),
+            U256::from(100_000u64),
+            100_000,
+        );
+        env.set_caller(agent);
+        score(&mut contract, h(1));
+        env.set_caller(seller);
+        contract.list_invoice(h(1));
+        env.set_caller(investor.clone());
+        token.approve(vault.address(), U256::from(0u8));
+
+        assert!(contract
+            .try_fund_invoice(h(1), U256::from(97_000u64))
+            .is_err());
+        assert_eq!(
+            contract.get_invoice(h(1)).unwrap().status,
+            InvoiceStatus::Listed
+        );
+        assert!(vault.get_funding(h(1)).is_none());
+    }
+
+    #[test]
+    fn odra_funding_requires_a_prebacked_repayment_reserve_and_retries_safely() {
+        let (env, mut contract, mut token, _, mut escrow, _) =
+            deploy_with_reserve(0);
+        let admin = env.get_account(0);
+        let seller = env.get_account(1);
+        let agent = env.get_account(2);
+        let investor = env.get_account(3);
+        let relayer = env.get_account(4);
+
+        env.set_caller(admin.clone());
+        contract.register_agent(agent.clone());
+        contract.register_settlement_relayer(relayer.clone());
+        env.set_caller(seller.clone());
+        contract.create_invoice(
+            h(1),
+            h(2),
+            h(3),
+            h(4),
+            h(5),
+            U256::from(100_000u64),
+            100_000,
+        );
+        env.set_caller(agent);
+        score(&mut contract, h(1));
+        env.set_caller(seller);
+        contract.list_invoice(h(1));
+        env.set_caller(investor.clone());
+        assert!(contract
+            .try_fund_invoice(h(1), U256::from(97_000u64))
+            .is_err());
+        assert_eq!(
+            contract.get_invoice(h(1)).unwrap().status,
+            InvoiceStatus::Listed
+        );
+
+        env.set_caller(admin.clone());
+        token.mint(
+            admin.clone(),
+            usd_cents_to_token_units(U256::from(100_000u64)),
+        );
+        token.approve(
+            escrow.address(),
+            usd_cents_to_token_units(U256::from(100_000u64)),
+        );
+        escrow.deposit_liquidity(U256::from(100_000u64));
+        env.set_caller(investor);
+        contract.fund_invoice(h(1), U256::from(97_000u64));
+        env.set_caller(relayer);
+        contract.record_gateway_repayment(
+            h(1),
+            h(10),
+            h(11),
+            U256::from(100_000u64),
+        );
+        assert_eq!(
+            contract.get_invoice(h(1)).unwrap().status,
+            InvoiceStatus::Repaid
+        );
     }
 }

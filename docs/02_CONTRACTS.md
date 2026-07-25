@@ -68,7 +68,7 @@ Failure branches:
 
 ## Contract 1: InvoiceRegistry
 
-> Current Casper Testnet MVP: `InvoiceRegistry` is the single authoritative lifecycle contract. Funding, seller cashout, gateway repayment, default, and investor claim all call this package directly. The standalone `FundingVault` and `RepaymentEscrow` packages remain isolated contract modules and test fixtures; their events must not drive invoice status until authenticated cross-contract orchestration is deployed.
+> Current Casper Testnet MVP: `InvoiceRegistry` is the single authoritative lifecycle contract. It uses authenticated cross-contract calls to `FundingVault`, `RepaymentEscrow`, and `AgentReputation`; each module accepts lifecycle mutations only from the configured Registry.
 
 ### Purpose
 
@@ -306,12 +306,7 @@ Accept investor funding and record/transfer the seller advance.
 
 ### MVP Asset Choice
 
-Implement either:
-
-1. Native CSPR funding with USD-cent accounting; or
-2. Mock CEP-18 `MockUSD` token.
-
-For clean DeFi storytelling, use `MockUSD` if time permits. For speed, use native testnet CSPR and display USD cents as accounting units.
+Funding uses the deployed 6-decimal `MockUsd` token. Contract math remains integer USD cents, with the exact conversion `token_units = usd_cents * 10_000`.
 
 ### Storage
 

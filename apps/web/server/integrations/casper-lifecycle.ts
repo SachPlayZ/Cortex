@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { InvoiceStatus } from "@cortex/shared";
 import type { ReceivableView } from "../../lib/finance";
 import { getCasperLifecycleClient, getPaymentRuntime, hasAgentSignerConfig, hasCasperLifecycleConfig } from "../payment-runtime";
-import { CasperChainSyncService, contractInvoiceIdHash } from "./casper-chain-sync";
+import { requireServerSigner } from "../signer-env";
+import { bootstrapStatusId, CasperChainSyncService, contractInvoiceIdHash } from "./casper-chain-sync";
 import type { BootstrapStatusRecord, InvoicePaymentRecord, LifecycleAction, LifecycleIntentRecord } from "./payment-store";
 
 type PreparedLifecycleAction = {
@@ -14,7 +15,6 @@ type PreparedLifecycleAction = {
 };
 
 const INTENT_TTL_MS = 10 * 60 * 1000;
-const BOOTSTRAP_STATUS_ID = "invoice_registry_bootstrap";
 
 export class CasperLifecycleService {
   private readonly chainSync = hasCasperLifecycleConfig() ? new CasperChainSyncService() : undefined;
@@ -37,7 +37,6 @@ export class CasperLifecycleService {
     this.requireLifecycleConfig();
     this.requireAgentConfig();
     await this.requireBootstrap("agentRegistered");
-    const adminSigner = this.requireAdminSigner();
     const invoice = await this.requireInvoice(invoiceId);
     const intent = await this.verifyIntent(invoiceId, intentId, "mint", deployHash);
     return this.runConfirm(intentId, async () => {
@@ -54,14 +53,9 @@ export class CasperLifecycleService {
 
       const lifecycle = getCasperLifecycleClient();
       const scoredInvoice = await paymentStore.requireInvoice(invoiceId);
-      const agentKeyPath = process.env.AGENT_PRIVATE_KEY_PATH;
-      if (!agentKeyPath) {
-        throw new Error("AGENT_PRIVATE_KEY_PATH is not configured");
-      }
-      const scoreDeployHash = await lifecycle.postRiskScore(scoredInvoice, { keyPath: agentKeyPath });
+      const agentSigner = requireServerSigner("AGENT", "posting the on-chain risk score");
+      const scoreDeployHash = await lifecycle.postRiskScore(scoredInvoice, agentSigner);
       await lifecycle.waitForTransaction(scoreDeployHash);
-      const reputationDeployHash = await lifecycle.noteInvoiceScored(process.env.AGENT_PUBLIC_KEY ?? intent.publicKeyHex, adminSigner);
-      await lifecycle.waitForTransaction(reputationDeployHash);
       const synced = await this.syncAndPersist(invoiceId, {
         scoreDeployHash,
         casperInvoiceExists: true,
@@ -108,6 +102,34 @@ export class CasperLifecycleService {
     return this.recordIntent(invoice, "fund", publicKeyHex, accountHash, "Listed", prepared);
   }
 
+  async prepareFundingApproval(invoiceId: string, publicKeyHex: string, accountHash: string): Promise<PreparedLifecycleAction> {
+    const invoice = await this.chainSyncRequired().getInvoiceState(invoiceId);
+    if (
+      (invoice.sellerPublicKey && invoice.sellerPublicKey === publicKeyHex) ||
+      (invoice.sellerAccount && invoice.sellerAccount === accountHash)
+    ) {
+      throw new Error("Seller cannot fund their own invoice");
+    }
+    if (invoice.statusCasper !== "Listed") {
+      throw new Error(`mUSDC approval requires verified Casper status Listed, got ${invoice.statusCasper}`);
+    }
+    const prepared = getCasperLifecycleClient().prepareApproveFunding(invoice, publicKeyHex);
+    return this.recordIntent(invoice, "approve_fund", publicKeyHex, accountHash, "Listed", prepared);
+  }
+
+  async confirmFundingApproval(
+    invoiceId: string,
+    intentId: string,
+    deployHash: string
+  ): Promise<ReceivableView> {
+    const intent = await this.verifyIntent(invoiceId, intentId, "approve_fund", deployHash, "Listed");
+    return this.runConfirm(intentId, async () => {
+      await this.verifyTransactionAgainstIntent(intent, deployHash);
+      await this.markIntentConfirmed(intentId, deployHash);
+      return this.requireInvoice(invoiceId);
+    });
+  }
+
   async confirmFund(invoiceId: string, intentId: string, deployHash: string): Promise<ReceivableView> {
     const intent = await this.verifyIntent(invoiceId, intentId, "fund", deployHash, "Listed");
     return this.runConfirm(intentId, async () => {
@@ -123,7 +145,6 @@ export class CasperLifecycleService {
   }
 
   async prepareCashout(invoiceId: string, publicKeyHex: string, accountHash: string): Promise<PreparedLifecycleAction> {
-    await this.requireBootstrap("vaultLiquidityDeposited");
     const invoice = await this.chainSyncRequired().getInvoiceState(invoiceId);
     this.requireSellerWallet(invoice, publicKeyHex, accountHash, "Only the seller wallet can withdraw the advance");
     if (invoice.statusCasper !== "RepaymentPending") {
@@ -188,41 +209,41 @@ export class CasperLifecycleService {
     };
   }
 
+  async assertRepaymentReserveReady(): Promise<void> {
+    await this.requireBootstrap("vaultLiquidityDeposited");
+  }
+
   async bootstrap(options?: { depositAmountUsdCents?: string }): Promise<BootstrapStatusRecord> {
     this.requireLifecycleConfig();
-    const adminKeyPath = process.env.CASPER_ADMIN_PRIVATE_KEY_PATH;
-    if (!adminKeyPath) {
-      throw new Error("CASPER_ADMIN_PRIVATE_KEY_PATH is required for bootstrap");
-    }
+    const adminSigner = requireServerSigner("CASPER_ADMIN", "Registry bootstrap");
     if (!process.env.AGENT_PUBLIC_KEY || !process.env.SETTLEMENT_RELAYER_PUBLIC_KEY) {
       throw new Error("AGENT_PUBLIC_KEY and SETTLEMENT_RELAYER_PUBLIC_KEY are required for bootstrap");
     }
     const lifecycle = getCasperLifecycleClient();
-    const signer = { keyPath: adminKeyPath };
     const current = await this.getBootstrapStatus();
     const next: Partial<BootstrapStatusRecord> = {
       lifecycleMode: "real"
     };
 
-    const registryAgentDeployHash = await lifecycle.registerRegistryAgent(process.env.AGENT_PUBLIC_KEY, signer);
+    const registryAgentDeployHash = await lifecycle.registerRegistryAgent(process.env.AGENT_PUBLIC_KEY, adminSigner);
     await lifecycle.waitForTransaction(registryAgentDeployHash);
-    const reputationAgentDeployHash = await lifecycle.registerReputationAgent(process.env.AGENT_PUBLIC_KEY, signer);
-    await lifecycle.waitForTransaction(reputationAgentDeployHash);
     next.agentRegistered = true;
-    next.registerAgentDeployHash = `${registryAgentDeployHash},${reputationAgentDeployHash}`;
+    next.registerAgentDeployHash = registryAgentDeployHash;
 
-    const registryRelayerDeployHash = await lifecycle.registerRegistrySettlementRelayer(process.env.SETTLEMENT_RELAYER_PUBLIC_KEY, signer);
+    const registryRelayerDeployHash = await lifecycle.registerRegistrySettlementRelayer(process.env.SETTLEMENT_RELAYER_PUBLIC_KEY, adminSigner);
     await lifecycle.waitForTransaction(registryRelayerDeployHash);
-    const escrowRelayerDeployHash = await lifecycle.registerEscrowSettlementRelayer(process.env.SETTLEMENT_RELAYER_PUBLIC_KEY, signer);
-    await lifecycle.waitForTransaction(escrowRelayerDeployHash);
     next.settlementRelayerRegistered = true;
-    next.registerSettlementRelayerDeployHash = `${registryRelayerDeployHash},${escrowRelayerDeployHash}`;
-    const depositAmount = options?.depositAmountUsdCents ?? process.env.CASPER_BOOTSTRAP_VAULT_LIQUIDITY_CENTS;
+    next.registerSettlementRelayerDeployHash = registryRelayerDeployHash;
+    const depositAmount =
+      options?.depositAmountUsdCents ?? process.env.CASPER_BOOTSTRAP_REPAYMENT_RESERVE_CENTS;
     if (depositAmount && !current.vaultLiquidityDeposited) {
-      const deployHash = await lifecycle.depositVaultLiquidity(depositAmount, signer);
-      await lifecycle.waitForTransaction(deployHash);
+      const treasurySigner = requireServerSigner("CASPER_TREASURY", "mUSDC repayment reserve bootstrap");
+      const approveDeployHash = await lifecycle.approveEscrowLiquidity(depositAmount, treasurySigner);
+      await lifecycle.waitForTransaction(approveDeployHash);
+      const depositDeployHash = await lifecycle.depositEscrowLiquidity(depositAmount, treasurySigner);
+      await lifecycle.waitForTransaction(depositDeployHash);
       next.vaultLiquidityDeposited = true;
-      next.depositVaultLiquidityDeployHash = deployHash;
+      next.depositVaultLiquidityDeployHash = `${approveDeployHash},${depositDeployHash}`;
     }
 
     return this.chainSyncRequired().updateBootstrapStatus(next);
@@ -408,9 +429,10 @@ export class CasperLifecycleService {
 
   private async getBootstrapStatus(): Promise<BootstrapStatusRecord> {
     const { paymentStore } = await getPaymentRuntime();
+    const statusId = bootstrapStatusId();
     return (
-      (await paymentStore.getBootstrapStatus(BOOTSTRAP_STATUS_ID)) ?? {
-        id: BOOTSTRAP_STATUS_ID,
+      (await paymentStore.getBootstrapStatus(statusId)) ?? {
+        id: statusId,
         lifecycleMode: hasCasperLifecycleConfig() ? "real" : "unavailable",
         agentRegistered: false,
         settlementRelayerRegistered: false,
@@ -448,14 +470,6 @@ export class CasperLifecycleService {
     }
   }
 
-  private requireAdminSigner(): { keyPath: string } {
-    const keyPath = process.env.CASPER_ADMIN_PRIVATE_KEY_PATH;
-    if (!keyPath) {
-      throw new Error("CASPER_ADMIN_PRIVATE_KEY_PATH is required for multi-contract lifecycle sync");
-    }
-    return { keyPath };
-  }
-
   private chainSyncRequired(): CasperChainSyncService {
     if (!this.chainSync) {
       throw new Error("Casper chain sync is unavailable");
@@ -470,6 +484,8 @@ function postStatusForAction(action: LifecycleAction): InvoiceStatus | undefined
       return "Listed";
     case "fund":
       return "RepaymentPending";
+    case "approve_fund":
+      return "Listed";
     case "cashout":
       return "RepaymentPending";
     case "claim":
@@ -488,8 +504,9 @@ function normalizeEntryPoint(value: string | { Custom?: string } | undefined): s
 }
 
 function expectedPackageHashForAction(action: LifecycleAction): string {
-  void action;
-  return process.env.INVOICE_REGISTRY_PACKAGE_HASH ?? "";
+  return action === "approve_fund"
+    ? process.env.MOCK_USD_PACKAGE_HASH ?? ""
+    : process.env.INVOICE_REGISTRY_PACKAGE_HASH ?? "";
 }
 
 function readPreparedNamedArgs(transactionJson: unknown) {

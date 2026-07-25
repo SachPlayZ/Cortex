@@ -46,8 +46,8 @@ export function Nav() {
     <header className="fixed inset-x-0 top-0 z-30 border-b border-border bg-background">
       <nav className="mx-auto flex h-16 w-full max-w-7xl items-center gap-3 px-4 sm:px-6 lg:px-8" aria-label="Primary navigation">
         <Button variant="ghost" nativeButton={false} render={<a href="/" aria-label="Cortex home" />} className="mr-auto px-1.5">
-          <img src="/android-chrome-512x512.png" alt="" className="size-8 rounded-lg" />
-          <span className="text-base font-semibold tracking-tight">Cortex</span>
+          <img src="/cortex-logo.png" alt="" className="size-8 rounded-lg object-cover" />
+          <span className="text-sm font-semibold uppercase tracking-[0.2em]">Cortex</span>
         </Button>
 
         <NavigationMenu className="hidden md:flex">

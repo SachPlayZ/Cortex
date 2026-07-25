@@ -1,5 +1,6 @@
 import { createDodoCheckout, dodoBaseUrl, HttpDodoCheckoutClient } from "../../../../../server/integrations/dodo";
 import { CasperChainSyncService } from "../../../../../server/integrations/casper-chain-sync";
+import { CasperLifecycleService } from "../../../../../server/integrations/casper-lifecycle";
 import { getPaymentRuntime } from "../../../../../server/payment-runtime";
 import { loadServerEnv } from "../../../../../server/env";
 
@@ -16,6 +17,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
+    await new CasperLifecycleService().assertRepaymentReserveReady();
     const { casperSettlement, paymentStore } = await getPaymentRuntime();
     const input = body.buyer_email
       ? { invoiceId: body.invoice_id, buyerEmail: body.buyer_email }

@@ -9,3 +9,6 @@ fqn = "repayment_escrow::RepaymentEscrow"
 
 [[contracts]]
 fqn = "agent_reputation::AgentReputation"
+
+[[contracts]]
+fqn = "mock_usd::MockUsd"

@@ -7,6 +7,7 @@ import {
   MemoryCasperSettlementClient
 } from "./integrations/settlement-relayer";
 import { CasperLifecycleClient } from "./integrations/casper-sdk";
+import { hasServerSigner, requireServerSigner } from "./signer-env";
 
 loadServerEnv();
 
@@ -33,6 +34,7 @@ export function getCasperLifecycleClient(): CasperLifecycleClient {
     fundingVaultPackageHash: process.env.FUNDING_VAULT_PACKAGE_HASH ?? "",
     repaymentEscrowPackageHash: process.env.REPAYMENT_ESCROW_PACKAGE_HASH ?? "",
     agentReputationPackageHash: process.env.AGENT_REPUTATION_PACKAGE_HASH ?? "",
+    mockUsdPackageHash: process.env.MOCK_USD_PACKAGE_HASH ?? "",
     paymentMotes: parsePaymentMotes(process.env.CASPER_LIFECYCLE_PAYMENT_MOTES) ?? 2_500_000_000
   });
 }
@@ -43,16 +45,17 @@ export function hasCasperLifecycleConfig(): boolean {
     Boolean(process.env.INVOICE_REGISTRY_PACKAGE_HASH) &&
     Boolean(process.env.FUNDING_VAULT_PACKAGE_HASH) &&
     Boolean(process.env.REPAYMENT_ESCROW_PACKAGE_HASH) &&
-    Boolean(process.env.AGENT_REPUTATION_PACKAGE_HASH)
+    Boolean(process.env.AGENT_REPUTATION_PACKAGE_HASH) &&
+    Boolean(process.env.MOCK_USD_PACKAGE_HASH)
   );
 }
 
 export function hasAgentSignerConfig(): boolean {
-  return hasCasperLifecycleConfig() && Boolean(process.env.AGENT_PRIVATE_KEY_PATH);
+  return hasCasperLifecycleConfig() && hasServerSigner("AGENT");
 }
 
 export function hasRealCasperSettlementConfig(): boolean {
-  return hasCasperLifecycleConfig() && Boolean(process.env.SETTLEMENT_RELAYER_PRIVATE_KEY_PATH);
+  return hasCasperLifecycleConfig() && hasServerSigner("SETTLEMENT_RELAYER");
 }
 
 async function createRuntime(): Promise<PaymentRuntime> {
@@ -86,7 +89,8 @@ function createSettlementClient(paymentStore: PaymentStore): CasperSettlementCli
       registryPackageHash: process.env.INVOICE_REGISTRY_PACKAGE_HASH ?? "",
       repaymentEscrowPackageHash: process.env.REPAYMENT_ESCROW_PACKAGE_HASH ?? "",
       agentReputationPackageHash: process.env.AGENT_REPUTATION_PACKAGE_HASH ?? "",
-      relayerPrivateKeyPath: process.env.SETTLEMENT_RELAYER_PRIVATE_KEY_PATH ?? "",
+      mockUsdPackageHash: process.env.MOCK_USD_PACKAGE_HASH ?? "",
+      relayerSigner: requireServerSigner("SETTLEMENT_RELAYER", "gateway repayment settlement"),
       paymentMotes: parsePaymentMotes(process.env.CASPER_RELAYER_PAYMENT_MOTES)
     });
   }

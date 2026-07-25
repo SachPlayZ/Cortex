@@ -27,6 +27,8 @@ pub struct AgentProfile {
 pub enum AgentReputationRevert {
     UnauthorizedAdmin = 4000,
     UnauthorizedAgent = 4001,
+    UnauthorizedRegistry = 4002,
+    RegistryAlreadyConfigured = 4003,
 }
 
 #[odra::event]
@@ -43,6 +45,7 @@ pub struct AgentReputationUpdated {
 #[odra::module]
 pub struct AgentReputation {
     admin: Var<Address>,
+    registry: Var<Address>,
     profiles: Mapping<Address, AgentProfile>,
     registered_agents: Mapping<Address, bool>,
 }
@@ -53,8 +56,16 @@ impl AgentReputation {
         self.admin.set(self.env().caller());
     }
 
-    pub fn register_agent(&mut self, agent: Address) {
+    pub fn set_registry(&mut self, registry: Address) {
         self.require_admin();
+        if self.registry.get().is_some() {
+            self.revert(AgentReputationRevert::RegistryAlreadyConfigured);
+        }
+        self.registry.set(registry);
+    }
+
+    pub fn register_agent(&mut self, agent: Address) {
+        self.require_registry();
         self.registered_agents.set(&agent, true);
         if self.profiles.get(&agent).is_none() {
             self.profiles.set(
@@ -74,7 +85,7 @@ impl AgentReputation {
     }
 
     pub fn note_invoice_scored(&mut self, agent: Address) {
-        self.require_admin();
+        self.require_registry();
         let mut profile = self.profile_or_revert(&agent);
         profile.invoices_scored += 1;
         profile.last_updated = self.now();
@@ -82,7 +93,7 @@ impl AgentReputation {
     }
 
     pub fn note_successful_repayment(&mut self, agent: Address) {
-        self.require_admin();
+        self.require_registry();
         let mut profile = self.profile_or_revert(&agent);
         profile.successful_repayments += 1;
         profile.reputation_score = (profile.reputation_score + 20).min(MAX_REPUTATION);
@@ -95,11 +106,11 @@ impl AgentReputation {
         });
     }
 
-    pub fn note_default(&mut self, agent: Address, risk_tier: RiskTier) {
-        self.require_admin();
+    pub fn note_default(&mut self, agent: Address, low_risk: bool) {
+        self.require_registry();
         let mut profile = self.profile_or_revert(&agent);
         profile.defaults += 1;
-        let slash = if risk_tier == RiskTier::Low {
+        let slash = if low_risk {
             profile.low_risk_defaults += 1;
             60
         } else {
@@ -119,6 +130,10 @@ impl AgentReputation {
         self.profiles.get(&agent)
     }
 
+    pub fn get_registry(&self) -> Option<Address> {
+        self.registry.get()
+    }
+
     fn require_admin(&self) {
         if self.env().caller()
             != self
@@ -126,6 +141,16 @@ impl AgentReputation {
                 .get_or_revert_with(AgentReputationRevert::UnauthorizedAdmin)
         {
             self.revert(AgentReputationRevert::UnauthorizedAdmin);
+        }
+    }
+
+    fn require_registry(&self) {
+        if self.env().caller()
+            != self
+                .registry
+                .get_or_revert_with(AgentReputationRevert::UnauthorizedRegistry)
+        {
+            self.revert(AgentReputationRevert::UnauthorizedRegistry);
         }
     }
 

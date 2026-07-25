@@ -63,7 +63,7 @@ export type RelayerJobRecord = {
   lastError?: string | undefined;
 };
 
-export type LifecycleAction = "mint" | "list" | "fund" | "cashout" | "claim";
+export type LifecycleAction = "mint" | "list" | "approve_fund" | "fund" | "cashout" | "claim";
 export type LifecycleIntentStatus = "prepared" | "confirming" | "confirmed" | "expired" | "rejected";
 
 export type LifecycleIntentRecord = {
