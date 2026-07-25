@@ -130,6 +130,12 @@ export class CasperContractCaller {
   }
 }
 
+// The flat CasperCallConfig.paymentMotes default (2.5 CSPR) covers single-contract
+// entrypoints fine, but underfunds multi-hop cross-contract calls, which reverted
+// with an out-of-gas error in production. Casper refunds unused payment, so this
+// only raises the ceiling for calls that actually need it.
+const CROSS_CONTRACT_PAYMENT_MOTES = 8_000_000_000;
+
 export class CasperLifecycleClient {
   private readonly registry: CasperContractCaller;
   private readonly escrow: CasperContractCaller;
@@ -300,13 +306,16 @@ export class CasperLifecycleClient {
   }
 
   prepareFundInvoice(invoice: ReceivableView, investorPublicKeyHex: string): CasperPreparedTransaction {
+    // fund_invoice chains three cross-contract calls (registry -> FundingVault -> MockUsd,
+    // plus registry -> RepaymentEscrow), well past what the flat default payment covers.
     return this.registry.prepare(
       investorPublicKeyHex,
       "fund_invoice",
       casperSdk.Args.fromMap({
         invoice_id: hashArg(invoice.id),
         funded_amount_usd_cents: u256Arg(invoice.advanceAmountUsdCents ?? "0")
-      })
+      }),
+      CROSS_CONTRACT_PAYMENT_MOTES
     );
   }
 
@@ -322,18 +331,22 @@ export class CasperLifecycleClient {
   }
 
   prepareCashOutAdvance(invoiceId: string, sellerPublicKeyHex: string): CasperPreparedTransaction {
+    // cash_out_advance cross-calls registry -> FundingVault -> MockUsd.
     return this.registry.prepare(
       sellerPublicKeyHex,
       "cash_out_advance",
-      casperSdk.Args.fromMap({ invoice_id: hashArg(invoiceId) })
+      casperSdk.Args.fromMap({ invoice_id: hashArg(invoiceId) }),
+      CROSS_CONTRACT_PAYMENT_MOTES
     );
   }
 
   prepareClaimRepayment(invoiceId: string, investorPublicKeyHex: string): CasperPreparedTransaction {
+    // claim_repayment cross-calls registry -> RepaymentEscrow -> MockUsd.
     return this.registry.prepare(
       investorPublicKeyHex,
       "claim_repayment",
-      casperSdk.Args.fromMap({ invoice_id: hashArg(invoiceId) })
+      casperSdk.Args.fromMap({ invoice_id: hashArg(invoiceId) }),
+      CROSS_CONTRACT_PAYMENT_MOTES
     );
   }
 }

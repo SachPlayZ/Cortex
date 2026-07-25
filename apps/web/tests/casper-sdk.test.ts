@@ -81,4 +81,25 @@ describe("CasperLifecycleClient canonical calls", () => {
     const args = call.mock.calls[0]?.[2];
     expect(args.getByName("amount").toString()).toBe("5000000000");
   });
+
+  it("raises the payment ceiling for fund/cashout/claim, which each cross-call another contract", () => {
+    const prepare = vi.fn().mockReturnValue({ entryPoint: "x", transaction: {}, transactionHash: "tx" });
+    const registry = { prepare } as unknown as CasperContractCaller;
+    const client = new CasperLifecycleClient(config, { registry });
+    const invoice = {
+      id: `0x${"55".repeat(32)}`,
+      invoiceHash: `0x${"66".repeat(32)}` as `0x${string}`,
+      repaymentAmountUsdCents: "100000",
+      advanceAmountUsdCents: "97000",
+      statusCasper: "Listed"
+    };
+    const publicKeyHex = `02${"77".repeat(33)}`;
+
+    client.prepareFundInvoice(invoice, publicKeyHex);
+    client.prepareCashOutAdvance(invoice.id, publicKeyHex);
+    client.prepareClaimRepayment(invoice.id, publicKeyHex);
+
+    // prepare(publicKeyHex, entryPoint, args, paymentMotes) - 4th arg is the override
+    expect(prepare.mock.calls.map((args) => args[3])).toEqual([8_000_000_000, 8_000_000_000, 8_000_000_000]);
+  });
 });
