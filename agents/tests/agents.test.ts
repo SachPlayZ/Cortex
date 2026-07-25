@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { sha256Hex } from "@cortex/shared";
 import { FxNormalizer, ManualFxRateProvider, parseInvoiceText, runUnderwriting } from "../src/index.js";
-import { extractJsonObject, GROQ_INVOICE_MODEL } from "../src/parser/groq-parser.js";
+import { extractJsonObject, GROQ_TEXT_MODEL, GROQ_VISION_MODEL } from "../src/parser/groq-parser.js";
 
 const now = new Date("2026-06-28T00:00:00.000Z");
 const validInvoice = `
@@ -36,8 +36,9 @@ describe("parser agent", () => {
     expect(extractJsonObject('Here is the object:\n{"invoice_number":"INV-2"}')).toBe('{"invoice_number":"INV-2"}');
   });
 
-  it("uses Llama 4 Scout for text and vision invoice extraction", () => {
-    expect(GROQ_INVOICE_MODEL).toBe("meta-llama/llama-4-scout-17b-16e-instruct");
+  it("uses gpt-oss-20b for text and qwen3.6-27b for vision invoice extraction", () => {
+    expect(GROQ_TEXT_MODEL).toBe("openai/gpt-oss-20b");
+    expect(GROQ_VISION_MODEL).toBe("qwen/qwen3.6-27b");
   });
 });
 

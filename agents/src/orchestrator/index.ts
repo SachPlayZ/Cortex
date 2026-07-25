@@ -2,7 +2,7 @@ import { hashJson, sha256Hex } from "@cortex/shared";
 import { buildAttestation } from "../attestation/index.js";
 import { FxNormalizer } from "../fx/index.js";
 import { parseInvoiceText } from "../parser/index.js";
-import { GROQ_INVOICE_MODEL, groqParseInvoice } from "../parser/groq-parser.js";
+import { GROQ_TEXT_MODEL, GROQ_VISION_MODEL, groqParseInvoice } from "../parser/groq-parser.js";
 import { priceRisk } from "../risk/index.js";
 import { verifyInvoice } from "../verification/index.js";
 import type { FxRateProvider } from "../fx/index.js";
@@ -32,7 +32,6 @@ export async function runUnderwriting(input: {
         ...(input.invoiceFileName ? { fileName: input.invoiceFileName } : {}),
         ...(input.invoiceMimeType ? { mimeType: input.invoiceMimeType } : {}),
         apiKey: input.groqApiKey,
-        model: GROQ_INVOICE_MODEL,
         now
       })
     : parseInvoiceText({ invoiceText: input.invoiceText, now });
@@ -78,7 +77,9 @@ export async function runUnderwriting(input: {
     verification,
     pricing,
     createdAt: now.toISOString(),
-    model: input.groqApiKey ? `groq/${GROQ_INVOICE_MODEL}` : "deterministic-v1"
+    model: input.groqApiKey
+      ? `groq/${input.invoiceImageDataUrl ? GROQ_VISION_MODEL : GROQ_TEXT_MODEL}`
+      : "deterministic-v1"
   });
 
   return {
