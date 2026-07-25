@@ -249,6 +249,19 @@ export class CasperLifecycleService {
     return this.chainSyncRequired().updateBootstrapStatus(next);
   }
 
+  async faucetMockUsd(publicKeyHex: string): Promise<{ deployHash: string; amountUsdCents: string }> {
+    this.requireLifecycleConfig();
+    // The mUSDC (MockUsd) contract's on-chain admin is whichever key deployed/initialized
+    // it, which is CASPER_TREASURY here — not CASPER_ADMIN (that key owns the InvoiceRegistry
+    // and friends, a separate contract with its own independently-tracked admin).
+    const treasurySigner = requireServerSigner("CASPER_TREASURY", "mUSDC test faucet");
+    const amountUsdCents = process.env.CASPER_FAUCET_MUSDC_CENTS ?? "500000";
+    const lifecycle = getCasperLifecycleClient();
+    const deployHash = await lifecycle.mintMockUsd(publicKeyHex, amountUsdCents, treasurySigner);
+    await lifecycle.waitForTransaction(deployHash);
+    return { deployHash, amountUsdCents };
+  }
+
   async requireInvoice(invoiceId: string): Promise<ReceivableView> {
     const { paymentStore } = await getPaymentRuntime();
     return paymentStore.requireInvoice(invoiceId);

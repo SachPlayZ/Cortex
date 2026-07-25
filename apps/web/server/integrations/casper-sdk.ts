@@ -249,6 +249,17 @@ export class CasperLifecycleClient {
     );
   }
 
+  async mintMockUsd(toPublicKeyHex: string, amountUsdCents: string, admin: CasperSigner): Promise<string> {
+    return this.mockUsd.call(
+      admin,
+      "mint",
+      casperSdk.Args.fromMap({
+        to: publicKeyAddressArg(toPublicKeyHex),
+        amount: u256Arg(usdCentsToMockUsdUnits(amountUsdCents))
+      })
+    );
+  }
+
   async recordGatewayRepayment(
     invoiceId: string,
     gatewayPaymentHash: string,

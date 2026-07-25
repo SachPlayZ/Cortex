@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUpRightIcon, CheckCircle2Icon, ExternalLinkIcon, RadioTowerIcon, WalletIcon } from "lucide-react";
-import type { ReceivableView } from "../lib/finance";
+import { ArrowUpRightIcon, CheckCircle2Icon, CircleDollarSignIcon, ExternalLinkIcon, RadioTowerIcon, WalletIcon } from "lucide-react";
+import { formatUsd, type ReceivableView } from "../lib/finance";
 import { casperExplorerDeployUrl, shortAccount, useCasperWallet } from "./casper-wallet";
 import { StatusPill } from "./status-pill";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
@@ -135,6 +135,30 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : `${label} failed`);
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function requestFaucet() {
+    setBusyAction("faucet");
+    setError("");
+    setMessage("");
+    setLastDeployHash("");
+    try {
+      const response = await fetch("/api/casper/faucet", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ public_key_hex: wallet.publicKeyHex })
+      });
+      const body = (await response.json()) as { deployHash?: string; amountUsdCents?: string; error?: string };
+      if (!response.ok || !body.deployHash) {
+        throw new Error(body.error ?? "Unable to request test mUSDC");
+      }
+      setLastDeployHash(body.deployHash);
+      setMessage(`Received ${formatUsd(body.amountUsdCents ?? "0")} test mUSDC.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "mUSDC faucet failed");
     } finally {
       setBusyAction("");
     }
@@ -272,6 +296,17 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
                 {busyAction === action.route ? "Submitting" : action.label}
               </Button>
             ))}
+            {wallet.role === "investor" && wallet.isConnected ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busyAction.length > 0}
+                onClick={() => void requestFaucet()}
+              >
+                {busyAction === "faucet" ? <Spinner data-icon="inline-start" /> : <CircleDollarSignIcon data-icon="inline-start" />}
+                {busyAction === "faucet" ? "Requesting" : "Get test mUSDC"}
+              </Button>
+            ) : null}
           </div>
         ) : (
           <p className="m-0 text-sm leading-6 text-muted-foreground">

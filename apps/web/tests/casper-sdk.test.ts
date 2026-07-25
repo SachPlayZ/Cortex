@@ -68,4 +68,17 @@ describe("CasperLifecycleClient canonical calls", () => {
     expect(args.getByName("amount").toString()).toBe("970000000");
     expect(usdCentsToMockUsdUnits("97000")).toBe("970000000");
   });
+
+  it("mints the exact 6-decimal mUSDC amount to the faucet recipient", async () => {
+    const call = vi.fn().mockResolvedValue("tx-mint");
+    const mockUsd = { call } as unknown as CasperContractCaller;
+    const client = new CasperLifecycleClient(config, { mockUsd });
+    const signer = { keyPath: "/tmp/admin.pem" };
+
+    await client.mintMockUsd(`02${"77".repeat(33)}`, "500000", signer);
+
+    expect(call.mock.calls[0]?.[1]).toBe("mint");
+    const args = call.mock.calls[0]?.[2];
+    expect(args.getByName("amount").toString()).toBe("5000000000");
+  });
 });
