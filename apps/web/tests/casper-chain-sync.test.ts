@@ -3,6 +3,8 @@ import {
   bootstrapStatusId,
   casperDeploymentScope,
   isCanonicalRegistryEvent,
+  mockUsdBalanceDictionaryKey,
+  mockUsdUnitsToUsdCents,
   parseLifecycleEvent
 } from "../server/integrations/casper-chain-sync";
 
@@ -63,6 +65,20 @@ describe("Casper Odra event decoding", () => {
       restoreEnv("FUNDING_VAULT_PACKAGE_HASH", original.vault);
       restoreEnv("REPAYMENT_ESCROW_PACKAGE_HASH", original.escrow);
     }
+  });
+
+  it("derives the mUSDC balances dictionary item key (verified live against testnet)", () => {
+    // account-hash-ea0b...bc84 held exactly 5,000,000,000 raw units (500,000.000000 mUSDC)
+    // after a real on-chain mint during manual testing; this locks in that known-good pair.
+    expect(mockUsdBalanceDictionaryKey("account-hash-ea0b32c46b9a7d6a4ee1f18d7b1d85784d26c6d24424f3caf93bb6a05dfcbc84")).toBe(
+      "50629474b98b95fa74cfad1174834cea38d5a19327e88f87a637f1e801086aef"
+    );
+  });
+
+  it("decodes the length-prefixed U256 CLValue.parsed array into USD cents", () => {
+    expect(mockUsdUnitsToUsdCents([5, 0, 242, 5, 42, 1])).toBe("500000");
+    expect(mockUsdUnitsToUsdCents([0])).toBe("0");
+    expect(mockUsdUnitsToUsdCents([])).toBe("0");
   });
 });
 

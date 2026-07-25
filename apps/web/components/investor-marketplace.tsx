@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRightIcon, ChartNoAxesCombinedIcon, LandmarkIcon, ReceiptTextIcon, TimerIcon, WalletCardsIcon } from "lucide-react";
+import { ArrowRightIcon, ChartNoAxesCombinedIcon, CircleDollarSignIcon, LandmarkIcon, ReceiptTextIcon, TimerIcon, WalletCardsIcon } from "lucide-react";
 import { aprEquivalent, expectedReturnPercent, formatUsd, investorYield, type ReceivableView } from "../lib/finance";
+import { useMockUsdBalance } from "../lib/use-mock-usd-balance";
 import { WalletGate, shortAccount, useCasperWallet } from "./casper-wallet";
 import { PageShell } from "./page-shell";
 import { StatusPill } from "./status-pill";
@@ -30,6 +31,7 @@ function ConnectedInvestorMarketplace() {
   const portfolio = useReceivables({ role: "investor", account: wallet.accountHash });
   const committed = useMemo(() => portfolio.invoices.reduce((sum, invoice) => sum + BigInt(invoice.advanceAmountUsdCents ?? "0"), 0n), [portfolio.invoices]);
   const expectedYield = useMemo(() => portfolio.invoices.reduce((sum, invoice) => sum + BigInt(invoice.investorYieldUsdCents ?? investorYield(invoice)), 0n), [portfolio.invoices]);
+  const musdcBalanceUsdCents = useMockUsdBalance(wallet.isConnected ? wallet.accountHash : undefined);
 
   return (
     <PageShell
@@ -42,10 +44,11 @@ function ConnectedInvestorMarketplace() {
           <h2 className="m-0 text-sm font-medium text-foreground">Capital position</h2>
           <p className="m-0 mt-1 text-sm text-muted-foreground">Live totals scoped to the connected investor wallet.</p>
         </div>
-        <div className="grid gap-6 border-y border-border py-6 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-border">
+        <div className="grid gap-6 border-y border-border py-6 sm:grid-cols-4 sm:gap-0 sm:divide-x sm:divide-border">
           <div className="sm:pr-6"><SummaryMetric icon={WalletCardsIcon} label="Committed" value={formatUsd(committed.toString())} detail="Signed funding positions" /></div>
           <div className="sm:px-6"><SummaryMetric icon={ChartNoAxesCombinedIcon} label="Expected yield" value={formatUsd(expectedYield.toString())} detail="After verified repayment" signal /></div>
-          <div className="sm:pl-6"><SummaryMetric icon={LandmarkIcon} label="Open listings" value={String(marketplace.invoices.length)} detail="Eligible Casper receivables" /></div>
+          <div className="sm:px-6"><SummaryMetric icon={LandmarkIcon} label="Open listings" value={String(marketplace.invoices.length)} detail="Eligible Casper receivables" /></div>
+          <div className="sm:pl-6"><SummaryMetric icon={CircleDollarSignIcon} label="mUSDC balance" value={musdcBalanceUsdCents !== null ? formatUsd(musdcBalanceUsdCents) : "..."} detail="Available to fund" /></div>
         </div>
       </div>
 

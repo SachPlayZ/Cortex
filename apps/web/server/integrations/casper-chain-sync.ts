@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { blake2b } from "@noble/hashes/blake2b.js";
 import { sha256Hex, type InvoiceStatus } from "@cortex/shared";
 import { getPaymentRuntime, hasCasperLifecycleConfig } from "../payment-runtime";
 import type {
@@ -49,6 +50,7 @@ export class CasperChainSyncService {
   private readonly rpcClient: InstanceType<CasperSdk["RpcClient"]>;
   private readonly contractHashPromises = new Map<string, Promise<string>>();
   private readonly eventsURefPromises = new Map<string, Promise<string>>();
+  private readonly stateURefPromises = new Map<string, Promise<string>>();
 
   constructor() {
     if (!hasCasperLifecycleConfig()) {
@@ -247,6 +249,82 @@ export class CasperChainSyncService {
     }
     return this.eventsURefPromises.get(cacheKey) as Promise<string>;
   }
+
+  private async getStateURef(contractHash: string, contractName: string): Promise<string> {
+    const cacheKey = `${contractName}:${contractHash}`;
+    if (!this.stateURefPromises.has(cacheKey)) {
+      this.stateURefPromises.set(cacheKey, (async () => {
+        const result = await this.rpcClient.queryLatestGlobalState(contractHash, []);
+        const contract = result.storedValue.contract;
+        const namedKeys = contract?.namedKeys ?? [];
+        const stateNamedKey = namedKeys.find((entry) => entry.name === "state");
+        const uref = stateNamedKey?.key?.toPrefixedString?.();
+        if (!uref) {
+          throw new Error(`Unable to resolve ${contractName} state dictionary URef`);
+        }
+        return uref;
+      })());
+    }
+    return this.stateURefPromises.get(cacheKey) as Promise<string>;
+  }
+
+  /**
+   * Reads an mUSDC (MockUsd) balance directly from Odra module storage. Odra's
+   * Mapping<Address, U256> stores each entry as a dictionary item under the
+   * contract's "state" URef, keyed by blake2b256(field_index_be_u32 ++ owner_key_bytes)
+   * hex-encoded. The `balances` field's index (3) was determined empirically against
+   * a live testnet balance — it is not derivable from the Rust source alone, since
+   * #[odra::module] field indices don't necessarily match declaration order.
+   */
+  async getMockUsdBalanceUsdCents(accountHash: string): Promise<string> {
+    const packageHash = process.env.MOCK_USD_PACKAGE_HASH;
+    if (!packageHash) {
+      throw new Error("MOCK_USD_PACKAGE_HASH is not configured");
+    }
+    const contractHash = await this.getContractHash(packageHash, "MockUsd");
+    const stateURef = await this.getStateURef(contractHash, "MockUsd");
+    const dictionaryKey = mockUsdBalanceDictionaryKey(accountHash);
+    const stateRootHash = (await this.rpcClient.getStateRootHashLatest()).stateRootHash.toHex();
+    try {
+      const result = await this.rpcClient.getDictionaryItem(stateRootHash, stateURef, dictionaryKey);
+      const raw = result.rawJSON as { stored_value?: { CLValue?: { parsed?: number[] } } };
+      const parsed = raw.stored_value?.CLValue?.parsed;
+      if (!Array.isArray(parsed)) return "0";
+      return mockUsdUnitsToUsdCents(parsed);
+    } catch {
+      // No dictionary item yet means the account has never held a balance.
+      return "0";
+    }
+  }
+}
+
+const MOCK_USD_BALANCES_FIELD_INDEX = 3;
+
+export function mockUsdBalanceDictionaryKey(accountHash: string): string {
+  const rawAccountHash = accountHash.replace(/^account-hash-/, "");
+  const ownerBytes = new Uint8Array(1 + 32);
+  ownerBytes[0] = 0x00; // Key::Account tag
+  ownerBytes.set(Buffer.from(rawAccountHash, "hex"), 1);
+
+  const indexBytes = new Uint8Array(4);
+  new DataView(indexBytes.buffer).setUint32(0, MOCK_USD_BALANCES_FIELD_INDEX, false);
+
+  const preimage = new Uint8Array(indexBytes.length + ownerBytes.length);
+  preimage.set(indexBytes, 0);
+  preimage.set(ownerBytes, indexBytes.length);
+
+  return Buffer.from(blake2b(preimage, { dkLen: 32 })).toString("hex");
+}
+
+// casper_types::U256 bytesrepr: [significant_byte_count, ...little_endian_bytes].
+// The RPC's CLValue.parsed already strips this to that same length-prefixed array.
+export function mockUsdUnitsToUsdCents(parsed: number[]): string {
+  const [length = 0, ...bytes] = parsed;
+  let units = 0n;
+  for (let i = Math.min(length, bytes.length) - 1; i >= 0; i -= 1) {
+    units = (units << 8n) | BigInt(bytes[i] ?? 0);
+  }
+  return (units / 10_000n).toString();
 }
 
 export function bootstrapStatusId(): string {

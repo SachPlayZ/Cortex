@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUpRightIcon, CheckCircle2Icon, CircleDollarSignIcon, ExternalLinkIcon, RadioTowerIcon, WalletIcon } from "lucide-react";
 import { formatUsd, type ReceivableView } from "../lib/finance";
+import { useMockUsdBalance } from "../lib/use-mock-usd-balance";
 import { casperExplorerDeployUrl, shortAccount, useCasperWallet } from "./casper-wallet";
 import { StatusPill } from "./status-pill";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
@@ -48,6 +49,7 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
   const [lastDeployHash, setLastDeployHash] = useState("");
   const [health, setHealth] = useState<CasperHealth | null>(null);
   const [invoice, setInvoice] = useState(initialInvoice);
+  const musdcBalanceUsdCents = useMockUsdBalance(wallet.isConnected ? wallet.accountHash : undefined, lastDeployHash);
 
   // Keyed on id (not the object reference) so a parent re-render that recreates
   // an equivalent invoice literal doesn't clobber local state just applied by
@@ -245,6 +247,10 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
             <WalletIcon />
             <span className="text-sm text-muted-foreground">Connected {wallet.role} wallet</span>
             <span className="break-all font-mono text-xs text-foreground">{shortAccount(wallet.accountHash)}</span>
+            <span className="ml-auto flex items-center gap-1.5 text-sm text-foreground">
+              <CircleDollarSignIcon className="size-4 text-muted-foreground" />
+              {musdcBalanceUsdCents !== null ? `${formatUsd(musdcBalanceUsdCents)} mUSDC` : "..."}
+            </span>
           </div>
         ) : null}
 
