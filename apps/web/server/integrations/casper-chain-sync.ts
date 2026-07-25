@@ -73,7 +73,7 @@ export class CasperChainSyncService {
       if (!packageHash) continue;
       const packageScope = stripContractPrefix(packageHash);
       const contractHash = await this.getContractHash(packageHash, source.contractName);
-      const eventsLength = await this.getEventsLength(contractHash);
+      const eventsLength = await this.getEventsLength(contractHash, stateRootHash);
       const cursorId = `${source.cursorId}:${packageScope}`;
       const cursor =
         (await paymentStore.getCasperSyncCursor(cursorId)) ??
@@ -208,8 +208,13 @@ export class CasperChainSyncService {
     });
   }
 
-  private async getEventsLength(contractHash: string): Promise<number> {
-    const result = await this.rpcClient.queryLatestGlobalState(contractHash, ["__events_length"]);
+  // Pinned to the same stateRootHash the dictionary walk below uses. Reading this via
+  // queryLatestGlobalState (unpinned) let it observe a newer root than stateRootHash when
+  // a transaction confirmed between the two calls, so the length included an event whose
+  // dictionary item didn't exist yet at stateRootHash - dictionary lookup then reverted
+  // with "-32003 Query failed" right after the fund_invoice/etc. that triggered the resync.
+  private async getEventsLength(contractHash: string, stateRootHash: string): Promise<number> {
+    const result = await this.rpcClient.queryGlobalStateByStateHash(stateRootHash, contractHash, ["__events_length"]);
     const raw = result.rawJSON as { stored_value?: { CLValue?: { parsed?: number } } };
     return Number(raw.stored_value?.CLValue?.parsed ?? 0);
   }
