@@ -1,4 +1,3 @@
-import { Clock3Icon } from "lucide-react";
 import { PaymentReturnStatus } from "../../../components/payment-return-status";
 import { Card, CardDescription, CardHeader, CardTitle } from "../../../components/ui/card";
 import { Spinner } from "../../../components/ui/spinner";
@@ -19,7 +18,6 @@ export default async function CheckoutSuccessPage({
             <div className="grid size-16 place-items-center rounded-lg bg-muted text-primary">
               <Spinner />
             </div>
-            <Clock3Icon className="text-primary" />
             <CardTitle className="text-3xl md:text-4xl">Waiting for payment confirmation</CardTitle>
             <CardDescription className="max-w-xl text-base leading-7">
               Dodo returned without an invoice reference. Keep this page open while Cortex waits for the webhook.

@@ -71,7 +71,7 @@ function HeroSection() {
             <span className="h-px w-10 bg-primary" />
             The verified ledger
           </div>
-          <h1 className="m-0 max-w-[12ch] text-[clamp(3.25rem,7.2vw,7rem)] font-medium leading-[0.92] tracking-[-0.055em] text-balance text-foreground">
+          <h1 className="m-0 max-w-[12ch] text-[clamp(3.25rem,7.2vw,6rem)] font-medium leading-[0.92] tracking-[-0.04em] text-balance text-foreground">
             Finance the wait. Prove every handoff.
           </h1>
           <p className="m-0 max-w-xl text-base leading-7 text-pretty text-muted-foreground sm:text-lg sm:leading-8">
@@ -101,13 +101,13 @@ function HeroSection() {
 function HeroDossier() {
   return (
     <div className="absolute inset-x-0 top-3 h-[31rem] lg:-right-20 lg:left-0 lg:top-2 lg:h-[42rem]">
-      <div className="landing-paper absolute left-[14%] top-3 w-[86%] rotate-[2.5deg] overflow-hidden rounded-[0.4rem] border border-black/20 bg-[#eee9dc] p-5 text-[#111518] shadow-[0_24px_50px_rgba(0,0,0,0.38)] sm:p-7 lg:left-[30%] lg:w-[68%] lg:p-9">
-        <div className="flex items-start justify-between border-b border-black/25 pb-4">
+      <div className="absolute left-[14%] top-3 w-[86%] overflow-hidden rounded-[0.4rem] border border-border bg-panel p-5 sm:p-7 lg:left-[26%] lg:w-[64%] lg:p-9">
+        <div className="flex items-start justify-between border-b border-border pb-4">
           <div>
-            <p className="m-0 text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-black/50">Receivable dossier</p>
-            <strong className="mt-1 block text-xl tracking-[-0.03em] sm:text-3xl">INV-2026-018</strong>
+            <p className="m-0 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-muted-foreground">Receivable dossier</p>
+            <strong className="mt-1 block text-xl tracking-[-0.03em] text-foreground sm:text-3xl">INV-2026-018</strong>
           </div>
-          <Badge className="border-black/15 bg-[#d9ff6f] text-[#101510] hover:bg-[#d9ff6f]">Financed</Badge>
+          <Badge>Financed</Badge>
         </div>
         <div className="mt-5 grid grid-cols-[1fr_1.15fr] gap-5 sm:gap-8">
           <div className="space-y-4 text-[0.68rem] sm:text-xs">
@@ -116,32 +116,32 @@ function HeroDossier() {
             <PaperField label="Due date" value="02 Aug 2026" />
           </div>
           <div>
-            <p className="m-0 text-[0.6rem] font-semibold uppercase tracking-[0.16em] text-black/45">Settlement terms</p>
-            <div className="mt-2 border-y border-black/20 py-3">
-              <strong className="block text-2xl tracking-[-0.04em] sm:text-4xl">$965.00</strong>
-              <span className="text-[0.65rem] text-black/55 sm:text-xs">funds today</span>
+            <p className="m-0 text-[0.6rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Settlement terms</p>
+            <div className="mt-2 border-y border-border py-3">
+              <strong className="block text-2xl tracking-[-0.04em] text-foreground sm:text-4xl">$965.00</strong>
+              <span className="text-[0.65rem] text-muted-foreground sm:text-xs">funds today</span>
             </div>
             <div className="flex items-end justify-between pt-3">
-              <span className="text-[0.65rem] text-black/55 sm:text-xs">repays at maturity</span>
-              <strong className="text-base sm:text-xl">$1,000.00</strong>
+              <span className="text-[0.65rem] text-muted-foreground sm:text-xs">repays at maturity</span>
+              <strong className="text-base text-foreground sm:text-xl">$1,000.00</strong>
             </div>
           </div>
         </div>
-        <div className="mt-6 hidden grid-cols-5 gap-2 border-t border-black/20 pt-4 text-[0.55rem] uppercase tracking-[0.12em] text-black/50 sm:grid">
+        <div className="mt-6 hidden grid-cols-5 gap-2 border-t border-border pt-4 text-[0.55rem] uppercase tracking-[0.12em] text-muted-foreground sm:grid">
           {['Issued', 'Scored', 'Listed', 'Funded', 'Repaid'].map((state, index) => (
             <span key={state} className="flex items-center gap-1.5">
-              <span className={`size-1.5 rounded-full ${index < 4 ? 'bg-[#20391e]' : 'bg-black/20'}`} />
+              <span className={`size-1.5 rounded-full ${index < 4 ? 'bg-primary' : 'bg-muted'}`} />
               {state}
             </span>
           ))}
         </div>
       </div>
 
-      <div className="absolute -right-[18%] bottom-0 w-[82%] -rotate-[3deg] overflow-hidden rounded-xl border border-white/15 bg-[#0d1318] p-5 shadow-[0_30px_70px_rgba(0,0,0,0.58)] sm:right-[-5%] sm:w-[68%] sm:p-6 lg:right-[-8%] lg:w-[58%] lg:p-8">
+      <div className="absolute -right-[18%] bottom-0 w-[82%] overflow-hidden rounded-xl border border-border bg-panel-elevated p-5 sm:right-[-5%] sm:w-[68%] sm:p-6 lg:right-[-8%] lg:w-[58%] lg:p-8">
         <div className="flex items-center justify-between border-b border-border pb-4">
           <div>
             <p className="m-0 font-mono text-[0.62rem] uppercase tracking-[0.2em] text-muted-foreground">Marketplace / INV-2026-018</p>
-            <strong className="mt-2 block text-lg sm:text-2xl">Verified funding offer</strong>
+            <strong className="mt-2 block text-lg text-foreground sm:text-2xl">Verified funding offer</strong>
           </div>
           <span className="hidden items-center gap-2 text-xs text-good sm:flex"><CheckCircle2Icon className="size-4" /> Casper state</span>
         </div>
@@ -153,7 +153,7 @@ function HeroDossier() {
         <div className="mt-5 flex items-end justify-between border-t border-border pt-5">
           <div>
             <p className="m-0 text-xs text-muted-foreground">Funding amount</p>
-            <strong className="mt-1 block text-2xl tracking-[-0.04em] tabular-nums sm:text-4xl">$965.00</strong>
+            <strong className="mt-1 block text-2xl tracking-[-0.04em] tabular-nums text-foreground sm:text-4xl">$965.00</strong>
           </div>
           <Button size="sm" nativeButton={false} render={<a href="/invoice/INV-2026-018" />} className="hidden sm:inline-flex">
             Review offer <ArrowRightIcon data-icon="inline-end" />
@@ -166,10 +166,10 @@ function HeroDossier() {
 
 function UnderwritingSection() {
   return (
-    <section id="flow" className="border-b border-border bg-[#090d11] px-4 py-24 sm:px-6 md:py-32 lg:px-8">
+    <section id="flow" className="border-b border-border px-4 py-24 sm:px-6 md:py-32 lg:px-8">
       <div className="mx-auto grid max-w-[90rem] gap-14 xl:grid-cols-[minmax(0,1.25fr)_minmax(23rem,0.75fr)] xl:items-center">
         <div className="relative min-h-[44rem]">
-          <div className="absolute left-0 top-3 hidden h-[calc(100%-0.75rem)] w-20 border border-border bg-[#0b1116] xl:flex xl:flex-col xl:items-center xl:justify-between xl:py-6">
+          <div className="absolute left-0 top-3 hidden h-[calc(100%-0.75rem)] w-20 border border-border bg-panel xl:flex xl:flex-col xl:items-center xl:justify-between xl:py-6">
             <span className="h-8 w-px bg-primary" />
             <span className="[writing-mode:vertical-rl] text-[0.62rem] uppercase tracking-[0.24em] text-muted-foreground">Private / off-chain</span>
             <img src="/cortex-logo.png" alt="" className="size-9 rounded-md object-cover" />
@@ -182,8 +182,7 @@ function UnderwritingSection() {
         </div>
 
         <div className="flex flex-col items-start gap-6 xl:pl-4">
-          <SectionNumber index="02 / 06" label="Underwriting handoff" />
-          <h2 className="m-0 max-w-[13ch] text-4xl font-medium leading-[0.98] tracking-[-0.045em] text-balance sm:text-5xl lg:text-6xl">
+          <h2 className="m-0 max-w-[13ch] text-4xl font-medium leading-[0.98] tracking-[-0.04em] text-balance sm:text-5xl lg:text-6xl">
             Evidence becomes capital. Private data stays private.
           </h2>
           <p className="m-0 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
@@ -213,11 +212,13 @@ function UnderwritingSection() {
 
 function InvoiceEvidence() {
   return (
-    <div className="landing-paper relative mx-auto max-w-[46rem] border border-black/25 bg-[#eee9dc] px-6 pb-8 pt-10 text-[#101418] sm:px-9">
-      <div className="absolute left-1/2 top-0 h-8 w-28 -translate-x-1/2 rounded-b-sm bg-[#68645a] shadow-[inset_0_-1px_0_rgba(255,255,255,0.25)]" />
-      <div className="flex items-start justify-between border-b border-black/25 pb-4">
-        <strong className="text-2xl tracking-[0.08em]">INVOICE</strong>
-        <span className="font-mono text-xs">INV-2026-018<br />18 JUL 2026</span>
+    <div className="relative mx-auto max-w-[46rem] border border-border bg-panel-elevated px-6 pb-8 pt-6 sm:px-9">
+      <div className="flex items-start justify-between border-b border-border pb-4">
+        <div>
+          <p className="m-0 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-muted-foreground">Private / redacted</p>
+          <strong className="mt-1 block text-2xl tracking-[-0.02em] text-foreground">INVOICE</strong>
+        </div>
+        <span className="font-mono text-xs text-muted-foreground">INV-2026-018<br />18 JUL 2026</span>
       </div>
       <div className="mt-5 grid gap-6 sm:grid-cols-2">
         <div className="space-y-4">
@@ -238,7 +239,7 @@ function InvoiceEvidence() {
 
 function AgentTrace() {
   return (
-    <div className="mx-auto mt-4 max-w-[46rem] border border-border bg-[#0b1116] px-5 py-4 sm:px-7">
+    <div className="mx-auto mt-4 max-w-[46rem] border border-border bg-panel px-5 py-4 sm:px-7">
       <div className="flex items-center justify-between border-b border-border pb-3">
         <span className="font-mono text-xs uppercase tracking-[0.14em] text-muted-foreground">Agent trace — typed pipeline</span>
         <Badge variant="secondary">validated</Badge>
@@ -262,7 +263,7 @@ function AgentTrace() {
 
 function AttestationPanel() {
   return (
-    <div className="mx-auto mt-4 grid max-w-[46rem] gap-5 border border-border bg-[#0b1116] p-5 sm:grid-cols-[1.2fr_0.8fr] sm:p-7">
+    <div className="mx-auto mt-4 grid max-w-[46rem] gap-5 border border-border bg-panel p-5 sm:grid-cols-[1.2fr_0.8fr] sm:p-7">
       <div>
         <p className="m-0 font-mono text-xs uppercase tracking-[0.14em] text-muted-foreground">Attestation / canonical JSON</p>
         <pre className="mt-4 overflow-hidden text-[0.64rem] leading-5 text-good/90 sm:text-xs">{`{
@@ -288,12 +289,11 @@ function MarketplaceSection() {
     <section className="border-b border-border px-4 py-24 sm:px-6 md:py-32 lg:px-8" id="marketplace-preview">
       <div className="mx-auto max-w-[96rem]">
         <div className="mb-12 max-w-4xl">
-          <SectionNumber index="03 / 06" label="Investor marketplace" />
-          <h2 className="mb-0 mt-7 text-4xl font-medium leading-[0.98] tracking-[-0.045em] sm:text-5xl lg:text-6xl">See the math before capital moves.</h2>
+          <h2 className="m-0 text-4xl font-medium leading-[0.98] tracking-[-0.04em] sm:text-5xl lg:text-6xl">See the math before capital moves.</h2>
           <p className="mb-0 mt-5 text-base text-muted-foreground sm:text-lg">One invoice. One investor. Every term visible before funding.</p>
         </div>
 
-        <div className="overflow-hidden border border-border bg-[#090d11] xl:grid xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="overflow-hidden border border-border xl:grid xl:grid-cols-[minmax(0,1fr)_24rem]">
           <div className="min-w-0">
             <div className="flex flex-col gap-3 border-b border-border p-4 sm:flex-row sm:items-center sm:p-5">
               <div className="flex h-10 min-w-0 flex-1 items-center gap-2 border border-border px-3 text-sm text-muted-foreground sm:max-w-sm">
@@ -336,7 +336,7 @@ function MarketplaceSection() {
             </div>
           </div>
 
-          <aside className="border-t border-border bg-[#0c1116] p-5 xl:border-l xl:border-t-0">
+          <aside className="border-t border-border bg-panel p-5 xl:border-l xl:border-t-0">
             <div className="flex items-start justify-between">
               <div>
                 <p className="m-0 font-mono text-lg">INV-2026-018</p>
@@ -370,11 +370,10 @@ function MarketplaceSection() {
 
 function SettlementSection() {
   return (
-    <section id="settlement" className="relative isolate overflow-hidden border-b border-border bg-[#05080b] px-4 py-24 sm:px-6 md:py-32 lg:px-8">
+    <section id="settlement" className="relative isolate overflow-hidden border-b border-border px-4 py-24 sm:px-6 md:py-32 lg:px-8">
       <div className="relative mx-auto min-h-[42rem] max-w-[96rem]">
         <div className="relative z-20 max-w-[42rem]">
-          <SectionNumber index="04 / 06" label="Dodo Test Mode → Casper Testnet" />
-          <h2 className="mb-0 mt-7 text-4xl font-medium leading-[0.98] tracking-[-0.045em] sm:text-5xl lg:text-6xl">A return URL is never proof.</h2>
+          <h2 className="m-0 text-4xl font-medium leading-[0.98] tracking-[-0.04em] sm:text-5xl lg:text-6xl">A return URL is never proof.</h2>
           <p className="mb-0 mt-5 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">Cortex waits for a signed webhook, validates the payment, then records one idempotent repayment on Casper.</p>
           <Button variant="outline" size="lg" className="mt-7" nativeButton={false} render={<a href="/agent" />}>
             Read the settlement proof <ArrowRightIcon data-icon="inline-end" />
@@ -382,27 +381,25 @@ function SettlementSection() {
         </div>
 
         <div className="relative mt-16 min-h-[21rem] lg:-mt-4 lg:ml-[31%]">
-          <div className="absolute left-[-8%] top-[52%] h-20 w-[118%] -rotate-[5deg] border-y border-white/10 bg-[#12171a] shadow-[0_30px_60px_rgba(0,0,0,0.55)]">
-            <div className="flex h-full items-center justify-around overflow-hidden font-mono text-xs uppercase tracking-[0.2em] text-white/20">
-              <span>return_url / untrusted</span><span>signature / verified</span><span>casper / recorded</span>
-            </div>
+          <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[0.62rem] uppercase tracking-[0.18em] text-muted-foreground">
+            <span>return_url / untrusted</span><ArrowRightIcon className="size-3" /><span>signature / verified</span><ArrowRightIcon className="size-3" /><span>casper / recorded</span>
           </div>
           <div className="relative grid grid-cols-2 gap-3 pt-3 sm:grid-cols-4 sm:gap-4">
             {settlementSteps.map((step, index) => (
-              <div key={step.label} className="relative flex min-h-40 flex-col justify-between border border-white/15 bg-[#0c1114] p-4 shadow-[0_22px_35px_rgba(0,0,0,0.42)] sm:min-h-48" style={{ transform: `translateY(${index * 20}px)` }}>
+              <div key={step.label} className="relative flex min-h-40 flex-col justify-between border border-border bg-panel p-4 sm:min-h-48" style={{ transform: `translateY(${index * 20}px)` }}>
                 <span className="font-mono text-xs text-muted-foreground">0{index + 1}</span>
                 <div className="relative z-10">
                   {step.trusted ? <CheckCircle2Icon className="mb-3 text-good" /> : <CircleAlertIcon className="mb-3 text-warn" />}
                   <strong className="block text-sm sm:text-base">{step.label}</strong>
                   <span className={`mt-1 block text-xs ${step.trusted ? 'text-good' : 'text-warn'}`}>{step.note}</span>
                 </div>
-                <span className="h-1 w-full bg-white/5"><span className={`block h-full ${step.trusted ? 'w-full bg-good' : 'w-1/4 bg-warn'}`} /></span>
+                <span className="h-1 w-full bg-muted"><span className={`block h-full ${step.trusted ? 'w-full bg-good' : 'w-1/4 bg-warn'}`} /></span>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="relative z-20 mt-14 ml-auto max-w-lg border border-border bg-[#090d11] p-5 sm:p-6 lg:-mt-4">
+        <div className="relative z-20 mt-14 ml-auto max-w-lg border border-border bg-panel p-5 sm:p-6 lg:-mt-4">
           <ProofRow icon={FingerprintIcon} label="Gateway payment hash" value="unique" />
           <ProofRow icon={CircleDollarSignIcon} label="Paid" value="USD 1,000.00" />
           <ProofRow icon={RadioTowerIcon} label="Deploy" value="9d32b43e…f00e9" mono />
@@ -417,12 +414,9 @@ function RolesSection() {
   return (
     <section id="roles" className="border-b border-border px-4 py-24 sm:px-6 md:py-32 lg:px-8">
       <div className="mx-auto max-w-[94rem]">
-        <div className="grid gap-8 lg:grid-cols-[0.7fr_1.3fr] lg:items-end">
-          <SectionNumber index="05 / 06" label="Role-based product" />
-          <div>
-            <h2 className="m-0 max-w-[16ch] text-4xl font-medium leading-[0.98] tracking-[-0.045em] sm:text-5xl lg:text-6xl">One receivable. Four clear points of view.</h2>
-            <p className="mb-0 mt-5 text-base text-muted-foreground sm:text-lg">Each participant sees only the evidence and action needed next.</p>
-          </div>
+        <div className="max-w-3xl">
+          <h2 className="m-0 max-w-[16ch] text-4xl font-medium leading-[0.98] tracking-[-0.04em] sm:text-5xl lg:text-6xl">One receivable. Four clear points of view.</h2>
+          <p className="mb-0 mt-5 text-base text-muted-foreground sm:text-lg">Each participant sees only the evidence and action needed next.</p>
         </div>
 
         <div className="mt-14 grid overflow-hidden border border-border lg:grid-cols-[1.15fr_0.95fr_0.95fr_0.95fr]">
@@ -487,8 +481,7 @@ function ClosingSection() {
     <>
       <section id="onboarding" className="px-4 pb-24 pt-24 sm:px-6 md:pb-28 md:pt-32 lg:px-8">
         <div className="mx-auto max-w-[82rem] text-center">
-          <SectionNumber index="06 / 06" label="Open Cortex" centered />
-          <h2 className="mb-0 mt-7 text-[clamp(3rem,6vw,6rem)] font-medium leading-[0.94] tracking-[-0.05em]">Put idle invoices to work.</h2>
+          <h2 className="m-0 text-[clamp(3rem,6vw,6rem)] font-medium leading-[0.94] tracking-[-0.04em]">Put idle invoices to work.</h2>
           <p className="mx-auto mb-0 mt-5 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">Upload evidence as a seller, or inspect verified receivables as an investor.</p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button size="lg" nativeButton={false} render={<a href="/seller/upload" />}>Upload an invoice <ArrowRightIcon data-icon="inline-end" /></Button>
@@ -527,19 +520,15 @@ function ProofItem({ icon: Icon, children }: { icon: typeof ShieldCheckIcon; chi
 }
 
 function PaperField({ label, value }: { label: string; value: string }) {
-  return <div><span className="block text-[0.55rem] font-semibold uppercase tracking-[0.1em] text-black/45">{label}</span><strong className="mt-1 block border-b border-black/20 pb-1 font-medium">{value}</strong></div>;
+  return <div><span className="block text-[0.55rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{label}</span><strong className="mt-1 block border-b border-border pb-1 font-medium text-foreground">{value}</strong></div>;
 }
 
 function RedactedField({ label, width }: { label: string; width: string }) {
-  return <div><span className="block text-[0.58rem] font-semibold uppercase tracking-[0.1em] text-black/45">{label}</span><span className={`mt-2 block h-3 bg-[#14191c] ${width}`} /></div>;
+  return <div><span className="block text-[0.58rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{label}</span><span className={`mt-2 block h-3 bg-muted ${width}`} /></div>;
 }
 
 function Metric({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return <div><span className="block text-[0.68rem] text-muted-foreground">{label}</span><strong className={`mt-1 block font-medium tabular-nums ${accent ? 'text-primary' : 'text-foreground'}`}>{value}</strong></div>;
-}
-
-function SectionNumber({ index, label, centered = false }: { index: string; label: string; centered?: boolean }) {
-  return <div className={`flex items-center gap-4 text-[0.66rem] font-medium uppercase tracking-[0.2em] text-muted-foreground ${centered ? 'justify-center' : ''}`}><span className="font-mono text-primary">{index}</span><span>{label}</span></div>;
 }
 
 function ProofRow({ icon: Icon, label, value, mono = false }: { icon: typeof WalletCardsIcon; label: string; value: string; mono?: boolean }) {
@@ -547,7 +536,7 @@ function ProofRow({ icon: Icon, label, value, mono = false }: { icon: typeof Wal
 }
 
 function RolePanel({ title, index, featured = false, children }: { title: string; index: string; featured?: boolean; children: React.ReactNode }) {
-  return <article className={`min-w-0 border-b border-border p-5 last:border-b-0 lg:min-h-[31rem] lg:border-b-0 lg:border-r lg:last:border-r-0 ${featured ? 'bg-panel' : 'bg-[#090d11]'}`}><header className="mb-7 flex items-center justify-between border-b border-border pb-4"><h3 className="m-0 text-xl font-medium"><span className="mr-3 text-primary">|</span>{title}</h3><span className="font-mono text-xs text-muted-foreground">{index}</span></header>{children}</article>;
+  return <article className={`min-w-0 border-b border-border p-5 last:border-b-0 lg:min-h-[31rem] lg:border-b-0 lg:border-r lg:last:border-r-0 ${featured ? 'bg-panel' : 'bg-bg'}`}><header className="mb-7 flex items-center justify-between border-b border-border pb-4"><h3 className="m-0 text-xl font-medium"><span className="mr-3 text-primary">|</span>{title}</h3><span className="font-mono text-xs text-muted-foreground">{index}</span></header>{children}</article>;
 }
 
 function KeyValue({ label, value }: { label: string; value: string }) {

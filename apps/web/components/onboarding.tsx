@@ -50,7 +50,7 @@ export function OnboardingPanel() {
   }
 
   return (
-    <div className="border border-border bg-[#090d11]">
+    <div className="border border-border bg-panel">
       <div className="grid lg:grid-cols-2">
         {(Object.keys(roleCopy) as OnboardingRole[]).map((role, index) => {
           const copy = roleCopy[role];

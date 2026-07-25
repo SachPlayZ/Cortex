@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRightIcon, FileTextIcon, FingerprintIcon, ShieldCheckIcon, SparklesIcon, WalletIcon } from "lucide-react";
+import { ArrowRightIcon, FileTextIcon, FingerprintIcon, ShieldCheckIcon, WalletIcon } from "lucide-react";
 import { WalletGate, shortAccount, useCasperWallet } from "./casper-wallet";
 import { InvoiceLifecyclePanel } from "./invoice-lifecycle-panel";
 import { PageShell } from "./page-shell";
@@ -164,7 +164,7 @@ function ConnectedSellerUploadFlow() {
           </CardContent>
           <CardFooter className="flex-col items-start gap-4 md:flex-row md:items-center md:justify-between">
             <Button type="button" onClick={submitInvoice} disabled={state === "underwriting"}>
-              {state === "underwriting" ? <Spinner data-icon="inline-start" /> : <SparklesIcon data-icon="inline-start" />}
+              {state === "underwriting" ? <Spinner data-icon="inline-start" /> : <ShieldCheckIcon data-icon="inline-start" />}
               {state === "underwriting" ? "Running agents" : "Run underwriting"}
             </Button>
             <Badge variant="secondary">{file ? file.name : "No file selected"}</Badge>

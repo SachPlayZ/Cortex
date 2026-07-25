@@ -37,17 +37,17 @@ function ConnectedInvestorMarketplace() {
       title="Underwrite the return before you fund the claim."
       description="Every listing exposes face value, advance, yield, due date, agent confidence, and the Casper state that makes funding legal."
     >
-      <Card>
-        <CardHeader>
-          <CardTitle>Capital position</CardTitle>
-          <CardDescription>Live totals scoped to the connected investor wallet.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-6 sm:grid-cols-3">
-          <SummaryMetric icon={WalletCardsIcon} label="Committed" value={formatUsd(committed.toString())} detail="Signed funding positions" />
-          <SummaryMetric icon={ChartNoAxesCombinedIcon} label="Expected yield" value={formatUsd(expectedYield.toString())} detail="After verified repayment" signal />
-          <SummaryMetric icon={LandmarkIcon} label="Open listings" value={String(marketplace.invoices.length)} detail="Eligible Casper receivables" />
-        </CardContent>
-      </Card>
+      <div>
+        <div className="mb-5">
+          <h2 className="m-0 text-sm font-medium text-foreground">Capital position</h2>
+          <p className="m-0 mt-1 text-sm text-muted-foreground">Live totals scoped to the connected investor wallet.</p>
+        </div>
+        <div className="grid gap-6 border-y border-border py-6 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-border">
+          <div className="sm:pr-6"><SummaryMetric icon={WalletCardsIcon} label="Committed" value={formatUsd(committed.toString())} detail="Signed funding positions" /></div>
+          <div className="sm:px-6"><SummaryMetric icon={ChartNoAxesCombinedIcon} label="Expected yield" value={formatUsd(expectedYield.toString())} detail="After verified repayment" signal /></div>
+          <div className="sm:pl-6"><SummaryMetric icon={LandmarkIcon} label="Open listings" value={String(marketplace.invoices.length)} detail="Eligible Casper receivables" /></div>
+        </div>
+      </div>
 
       <Tabs defaultValue="market" className="gap-6">
         <TabsList>

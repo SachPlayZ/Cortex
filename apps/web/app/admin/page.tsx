@@ -40,12 +40,15 @@ export default async function AdminPage() {
         <AlertDescription>Sensitive actions stay behind authenticated routes. This page reports state; it does not expose relayer secrets or private keys.</AlertDescription>
       </Alert>
 
-      <Card>
-        <CardHeader><CardTitle>Live system state</CardTitle><CardDescription>Readiness derived from the server and contract configuration.</CardDescription></CardHeader>
-        <CardContent className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {checks.map(([label, value, ok]) => <HealthItem key={label} label={label} value={value} ok={ok} />)}
-        </CardContent>
-      </Card>
+      <div>
+        <div className="mb-5">
+          <h2 className="m-0 text-sm font-medium text-foreground">Live system state</h2>
+          <p className="m-0 mt-1 text-sm text-muted-foreground">Readiness derived from the server and contract configuration.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-6 border-y border-border py-6 sm:grid-cols-4 sm:gap-0 sm:divide-x sm:divide-border">
+          {checks.map(([label, value, ok]) => <div key={label} className="sm:px-6 sm:first:pl-0"><HealthItem label={label} value={value} ok={ok} /></div>)}
+        </div>
+      </div>
 
       <Card>
         <CardHeader><CardTitle>Operational controls</CardTitle><CardDescription>Each control exists to preserve an explicit safety invariant.</CardDescription></CardHeader>

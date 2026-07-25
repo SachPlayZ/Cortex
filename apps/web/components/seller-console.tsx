@@ -48,17 +48,17 @@ function ConnectedSellerConsole() {
         </Button>
       }
     >
-      <Card>
-        <CardHeader>
-          <CardTitle>Portfolio at a glance</CardTitle>
-          <CardDescription>Contract-backed values for this connected seller wallet.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-6 sm:grid-cols-3">
-          <Metric icon={WalletCardsIcon} label="Face value" value={formatUsd(faceValue.toString())} detail="Across uploaded invoices" />
-          <Metric icon={CircleDollarSignIcon} label="Advance available" value={formatUsd(advanced.toString())} detail="Ready after funding" signal={advanced > 0n} />
-          <Metric icon={LinkIcon} label="Open workflows" value={String(open)} detail="Still moving on-chain" />
-        </CardContent>
-      </Card>
+      <div>
+        <div className="mb-5">
+          <h2 className="m-0 text-sm font-medium text-foreground">Portfolio at a glance</h2>
+          <p className="m-0 mt-1 text-sm text-muted-foreground">Contract-backed values for this connected seller wallet.</p>
+        </div>
+        <div className="grid gap-6 border-y border-border py-6 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-border">
+          <div className="sm:pr-6"><Metric icon={WalletCardsIcon} label="Face value" value={formatUsd(faceValue.toString())} detail="Across uploaded invoices" /></div>
+          <div className="sm:px-6"><Metric icon={CircleDollarSignIcon} label="Advance available" value={formatUsd(advanced.toString())} detail="Ready after funding" signal={advanced > 0n} /></div>
+          <div className="sm:pl-6"><Metric icon={LinkIcon} label="Open workflows" value={String(open)} detail="Still moving on-chain" /></div>
+        </div>
+      </div>
 
       <Card>
         <CardHeader>
