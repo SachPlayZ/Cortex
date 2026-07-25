@@ -1,5 +1,77 @@
 # Todo
 
+## Plan — Fix production PDF underwriting
+
+- [x] Reproduce the Vercel `DOMMatrix` failure and identify the missing runtime dependency.
+- [x] Load and trace the PDF.js Node canvas globals and worker before parsing PDFs.
+- [x] Add PDF extraction regression coverage.
+- [x] Run tests, typecheck, build, redeploy, and smoke-test production underwriting.
+
+## Verification — Fix production PDF underwriting
+
+- [x] PDF extraction succeeds without browser-provided globals.
+- [x] Web tests, typecheck, and production build pass.
+- [x] Production PDF underwriting no longer returns `DOMMatrix is not defined`.
+- [x] No unrelated diff or secret exposure.
+
+## Review — Fix production PDF underwriting
+
+### Changed
+
+- Promoted `@napi-rs/canvas` to a traced web runtime dependency and installed PDF.js Node globals before loading `pdf-parse`.
+- Configured the bundled PDF worker explicitly so Vercel includes it.
+- Moved PDF extraction into a server integration and added a no-browser-globals regression test.
+
+### Verified
+
+- Reproduced the original Vercel log: missing `@napi-rs/canvas`, followed by missing `DOMMatrix`, `ImageData`, and `Path2D`.
+- All 39 web tests pass; typecheck and production build pass.
+- Production deployment is Ready at `https://cortex-casper.vercel.app`.
+- Live PDF route reaches PDF validation (`Invalid PDF structure`) without canvas, DOMMatrix, or worker-loader errors.
+
+### Risks
+
+- Scanned PDFs still depend on the existing OCR/vision fallback after text extraction returns empty.
+
+### Follow-ups
+
+- Retry the original invoice PDF through Run underwriting.
+
+## Plan — Production CSPR.click app ID
+
+- [x] Replace the template app ID in local/example configuration.
+- [x] Update Vercel Production and Preview.
+- [x] Redeploy production and verify app health.
+
+## Verification — Production CSPR.click app ID
+
+- [x] Production build succeeds.
+- [x] Production routes, Casper health, and RPC proxy pass.
+- [x] Production browser bundle contains the registered app ID.
+- [x] No secrets tracked or diff errors.
+
+## Review — Production CSPR.click app ID
+
+### Changed
+
+- Set the registered CSPR.click app ID locally, in `.env.example`, and in Vercel Production/Preview.
+- Redeployed the production app.
+
+### Verified
+
+- Deployment is Ready and aliased to `https://cortex-casper.vercel.app`.
+- Landing, seller, and investor routes return 200.
+- Casper health reports real mode with completed bootstrap; proxied RPC returns the latest state root.
+- The production browser bundle contains the registered CSPR.click app ID.
+
+### Risks
+
+- None identified.
+
+### Follow-ups
+
+- None.
+
 ## Plan — Complete deployment environment
 
 - [x] Audit local, example, and Vercel environment requirements without exposing secrets.

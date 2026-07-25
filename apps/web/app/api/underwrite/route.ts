@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { runUnderwriting } from "@cortex/agents";
 import { FrankfurterFxRateProvider } from "@cortex/agents";
 import { sha256Hex } from "@cortex/shared";
-import { createRequire } from "node:module";
 import { loadServerEnv } from "../../../server/env";
 import { getPaymentRuntime } from "../../../server/payment-runtime";
 import { extractInvoiceTextWithLocalOcr } from "../../../server/integrations/invoice-ocr";
+import { extractPdfText } from "../../../server/integrations/pdf-text";
 import { contractInvoiceIdHash } from "../../../server/integrations/casper-chain-sync";
 
 loadServerEnv();
@@ -23,7 +23,6 @@ type InvoiceEvidence = {
 };
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
-const nodeRequire = createRequire(import.meta.url);
 
 export async function POST(req: NextRequest) {
   try {
@@ -242,17 +241,6 @@ async function readInvoiceEvidence(file: File, options: { allowVisionFallback: b
   throw new Error("Unsupported invoice file type. Upload a PDF, PNG, JPG, WEBP, or plain text invoice.");
 }
 
-async function extractPdfText(bytes: Uint8Array): Promise<string> {
-  const { PDFParse } = nodeRequire("pdf-parse") as typeof import("pdf-parse");
-  const parser = new PDFParse({ data: bytes });
-  try {
-    const result = await parser.getText();
-    return normalizeExtractedText(result.text ?? "");
-  } finally {
-    await parser.destroy();
-  }
-}
-
 function normalizeMimeType(fileType: string, fileName: string): string {
   const lowerType = fileType.toLowerCase();
   const lowerName = fileName.toLowerCase();
@@ -268,12 +256,4 @@ function normalizeMimeType(fileType: string, fileName: string): string {
 function isTextInvoice(mimeType: string, fileName: string): boolean {
   const lowerName = fileName.toLowerCase();
   return mimeType.startsWith("text/") || lowerName.endsWith(".txt") || lowerName.endsWith(".text");
-}
-
-function normalizeExtractedText(text: string): string {
-  return text
-    .replace(/\u0000/g, "")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
 }

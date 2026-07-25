@@ -16,6 +16,7 @@
     "@cortex/agents": "workspace:^",
     "@cortex/shared": "workspace:*",
     "@gsap/react": "^2.1.2",
+    "@napi-rs/canvas": "0.1.80",
     "@tailwindcss/postcss": "^4.3.2",
     "casper-js-sdk": "5.0.12",
     "class-variance-authority": "^0.7.1",
