@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { LockKeyholeIcon, WalletIcon } from "lucide-react";
-import { readStoredWalletIdentity, readWalletIdentity, resolveCsprClickTransactionHash, type StoredWalletIdentity } from "../lib/casper-wallet-identity";
+import { casperExplorerDeployUrl, readStoredWalletIdentity, readWalletIdentity, resolveCsprClickTransactionHash, type StoredWalletIdentity } from "../lib/casper-wallet-identity";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -348,3 +348,5 @@ export function shortAccount(account: string): string {
   if (account.length <= 22) return account;
   return `${account.slice(0, 10)}...${account.slice(-8)}`;
 }
+
+export { casperExplorerDeployUrl };

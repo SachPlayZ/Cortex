@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUpRightIcon, CheckCircle2Icon, RadioTowerIcon, WalletIcon } from "lucide-react";
+import { ArrowUpRightIcon, CheckCircle2Icon, ExternalLinkIcon, RadioTowerIcon, WalletIcon } from "lucide-react";
 import type { ReceivableView } from "../lib/finance";
-import { shortAccount, useCasperWallet } from "./casper-wallet";
+import { casperExplorerDeployUrl, shortAccount, useCasperWallet } from "./casper-wallet";
 import { StatusPill } from "./status-pill";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
@@ -45,10 +45,14 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
   const [busyAction, setBusyAction] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [lastDeployHash, setLastDeployHash] = useState("");
   const [health, setHealth] = useState<CasperHealth | null>(null);
   const [invoice, setInvoice] = useState(initialInvoice);
 
-  useEffect(() => setInvoice(initialInvoice), [initialInvoice]);
+  // Keyed on id (not the object reference) so a parent re-render that recreates
+  // an equivalent invoice literal doesn't clobber local state just applied by
+  // runAction's optimistic setInvoice(confirmBody.invoice) after a deploy confirms.
+  useEffect(() => setInvoice(initialInvoice), [initialInvoice.id]);
 
   useEffect(() => {
     void fetch("/api/admin/casper/health", { cache: "no-store" })
@@ -87,6 +91,7 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
     setBusyAction(route);
     setError("");
     setMessage("");
+    setLastDeployHash("");
     try {
       const actionRoutes =
         route === "fund"
@@ -111,6 +116,7 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
         }
 
         const submittedHash = await wallet.sendTransaction(preparedBody.transaction);
+        setLastDeployHash(submittedHash);
         const confirmResponse = await fetch(`/api/invoices/${invoice.id}/${action.confirmRoute}`, {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -192,9 +198,19 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
                   {isCurrent ? <Badge variant="secondary">current</Badge> : null}
                 </div>
                 <div className="truncate text-sm font-medium text-foreground">{label}</div>
-                <div className="mt-2 min-h-8 break-all font-mono text-xs leading-4 text-muted-foreground">
-                  {deployHash ?? "Awaiting deploy"}
-                </div>
+                {deployHash ? (
+                  <a
+                    href={casperExplorerDeployUrl(deployHash)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 flex min-h-8 items-start gap-1 break-all font-mono text-xs leading-4 text-primary hover:underline"
+                  >
+                    {deployHash}
+                    <ExternalLinkIcon className="mt-0.5 size-3 shrink-0" />
+                  </a>
+                ) : (
+                  <div className="mt-2 min-h-8 break-all font-mono text-xs leading-4 text-muted-foreground">Awaiting deploy</div>
+                )}
               </div>
             );
           })}
@@ -223,7 +239,15 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
         {message ? (
           <Alert>
             <AlertTitle>Transaction confirmed</AlertTitle>
-            <AlertDescription>{message}</AlertDescription>
+            <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+              <span>{message}</span>
+              {lastDeployHash ? (
+                <Button variant="outline" size="sm" nativeButton={false} render={<a href={casperExplorerDeployUrl(lastDeployHash)} target="_blank" rel="noreferrer" />}>
+                  View transaction proof
+                  <ExternalLinkIcon data-icon="inline-end" />
+                </Button>
+              ) : null}
+            </AlertDescription>
           </Alert>
         ) : null}
         {error ? (

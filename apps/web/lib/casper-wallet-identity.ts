@@ -48,3 +48,9 @@ export function readStoredWalletIdentity(value: string | null): StoredWalletIden
 function emptyIdentity(): StoredWalletIdentity {
   return { publicKeyHex: "", accountHash: "" };
 }
+
+export function casperExplorerDeployUrl(deployHash: string): string {
+  const chainName = process.env.NEXT_PUBLIC_CASPER_CHAIN_NAME ?? "casper-test";
+  const base = chainName === "casper" ? "https://cspr.live" : "https://testnet.cspr.live";
+  return `${base}/deploy/${deployHash}`;
+}

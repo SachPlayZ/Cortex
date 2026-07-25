@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readStoredWalletIdentity, readWalletIdentity, resolveCsprClickTransactionHash } from "../lib/casper-wallet-identity";
+import { casperExplorerDeployUrl, readStoredWalletIdentity, readWalletIdentity, resolveCsprClickTransactionHash } from "../lib/casper-wallet-identity";
 
 const publicKey = "020344aed50809cabf417e89f51fc71fab442c5564cb8aa1ee2cff57d6e4a6c927cb";
 const accountHash = "account-hash-d0fbcba833a5bc6421de00c9b12936f43f92bcd8e5b336a0448612e7f2aeda70";
@@ -25,5 +25,16 @@ describe("CSPR.click wallet identity", () => {
     expect(() => resolveCsprClickTransactionHash({ cancelled: true })).toThrow("cancelled");
     expect(() => resolveCsprClickTransactionHash({ error: "rejected" })).toThrow("rejected");
     expect(() => resolveCsprClickTransactionHash({})).toThrow("transaction hash");
+  });
+
+  it("builds a testnet explorer deploy link by default", () => {
+    expect(casperExplorerDeployUrl("abc123")).toBe("https://testnet.cspr.live/deploy/abc123");
+  });
+
+  it("builds a mainnet explorer deploy link when the chain name is casper", () => {
+    const original = process.env.NEXT_PUBLIC_CASPER_CHAIN_NAME;
+    process.env.NEXT_PUBLIC_CASPER_CHAIN_NAME = "casper";
+    expect(casperExplorerDeployUrl("abc123")).toBe("https://cspr.live/deploy/abc123");
+    process.env.NEXT_PUBLIC_CASPER_CHAIN_NAME = original;
   });
 });
