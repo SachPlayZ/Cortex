@@ -78,11 +78,18 @@ export async function groqParseInvoice(input: {
       { role: "user", content: userContent }
     ],
     temperature: 0,
-    max_completion_tokens: 700
+    max_completion_tokens: 2048,
+    reasoning_effort: "low"
   });
 
-  const raw = completion.choices[0]?.message?.content;
-  if (!raw) throw new Error("Groq returned empty response");
+  const choice = completion.choices[0];
+  const raw = choice?.message?.content;
+  if (!raw) {
+    if (choice?.finish_reason === "length") {
+      throw new Error("Groq ran out of tokens before finishing extraction (finish_reason=length). The invoice may be too long or complex — try a shorter document.");
+    }
+    throw new Error("Groq returned empty response");
+  }
 
   let parsed: unknown;
   try {
@@ -98,7 +105,7 @@ export async function groqParseInvoice(input: {
     line_items: [],
     warnings: [],
     extraction_confidence: 0.92,
-    ...(parsed as Record<string, unknown>)
+    ...stripUnfilledOptionalFields(parsed as Record<string, unknown>)
   };
 
   let result: ParsedInvoice;
@@ -120,6 +127,25 @@ export async function groqParseInvoice(input: {
   }
 
   return result;
+}
+
+const OPTIONAL_STRING_FIELDS = ["seller_email", "buyer_email", "buyer_domain", "payment_terms"] as const;
+const UNFILLED_PLACEHOLDER = /^\[.*\]$|^(n\/a|none|not provided|not specified|unknown|-)$/i;
+
+// The model is told to omit fields it can't find, but reasoning models sometimes
+// fill bracket placeholders ("[Client email]") literally instead. Strip those
+// deterministically rather than relying on prompt compliance, since a filled
+// placeholder fails schema validation (e.g. z.string().email()) while an omitted
+// optional field passes cleanly.
+export function stripUnfilledOptionalFields(candidate: Record<string, unknown>): Record<string, unknown> {
+  const cleaned = { ...candidate };
+  for (const field of OPTIONAL_STRING_FIELDS) {
+    const value = cleaned[field];
+    if (typeof value === "string" && (value.trim() === "" || UNFILLED_PLACEHOLDER.test(value.trim()))) {
+      delete cleaned[field];
+    }
+  }
+  return cleaned;
 }
 
 export function extractJsonObject(raw: string): string {
