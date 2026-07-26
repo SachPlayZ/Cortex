@@ -137,7 +137,16 @@ function PortfolioTable({ invoices }: { invoices: ReceivableView[] }) {
                 <TableCell className="tabular-nums">{formatUsd(invoice.advanceAmountUsdCents ?? "0")}</TableCell>
                 <TableCell className="tabular-nums">{formatUsd(invoice.investorYieldUsdCents ?? investorYield(invoice))}</TableCell>
                 <TableCell><StatusPill status={invoice.statusCasper} /></TableCell>
-                <TableCell>{portfolioActionLabel(invoice.statusCasper)}</TableCell>
+                <TableCell>
+                  {invoice.statusCasper === "Repaid" ? (
+                    <Button variant="link" size="sm" nativeButton={false} render={<a href={`/invoice/${invoice.id}`} />} className="px-0">
+                      Claim now
+                      <ArrowRightIcon data-icon="inline-end" />
+                    </Button>
+                  ) : (
+                    portfolioActionLabel(invoice.statusCasper)
+                  )}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
