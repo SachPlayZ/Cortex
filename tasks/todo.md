@@ -1,5 +1,38 @@
 # Todo
 
+## Plan — Submission contract addresses
+
+- [x] Resolve the active Casper Testnet contract package hashes from deployment state and configuration.
+- [x] Verify the addresses against the live application/chain configuration.
+- [x] Add a concise submission-ready contracts section to `README.md`.
+
+## Verification — Submission contract addresses
+
+- [x] Confirm README values match active configuration exactly.
+- [x] Run relevant documentation checks and `git diff --check`.
+
+## Review — Submission contract addresses
+
+### Changed
+
+- Reworked the deployment block into a submission-ready Casper Testnet addresses section.
+- Added the five stable package hashes, roles, explorer links, copy-ready values, and current v1 contract hashes.
+
+### Verified
+
+- All five packages exist on Casper Testnet and resolve to the documented v1 contract hashes.
+- Production reports real lifecycle mode with Registry bootstrap complete.
+- README hashes match `.env.example`, local active configuration, and `contracts/README.md`.
+- `git diff --check` passes.
+
+### Risks
+
+- Version-specific contract hashes change on upgrade; package hashes remain the submission addresses.
+
+### Follow-ups
+
+- Use `InvoiceRegistry` when a submission form accepts only one contract address.
+
 ## Plan — Cortex social visuals
 
 - [x] Create a 1200×630 OG banner using the existing Cortex mark and product palette.

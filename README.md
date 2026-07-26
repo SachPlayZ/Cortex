@@ -272,17 +272,41 @@ Before shipping, verify:
 - No private invoice data is written on-chain.
 - All money calculations use integer cents/minor units or fixed-point rates.
 
-## Current Deployment Notes
+## Casper Testnet Contract Addresses — Submission
 
-Latest Casper testnet deployment:
+**Network:** Casper Testnet (`casper-test`)
 
-| Contract | Package hash | Explorer |
-| --- | --- | --- |
-| `InvoiceRegistry` | `hash-e927cc878c81a521fc5e2bfc8dd163bf40071996703d656e1562fbe448f222b1` | [package](https://testnet.cspr.live/contract-package/e927cc878c81a521fc5e2bfc8dd163bf40071996703d656e1562fbe448f222b1) |
-| `FundingVault` | `hash-9fabd34fa621fa2e8c8d701e7c144b3dc410437ff302122f0144221b46a73ca3` | [package](https://testnet.cspr.live/contract-package/9fabd34fa621fa2e8c8d701e7c144b3dc410437ff302122f0144221b46a73ca3) |
-| `RepaymentEscrow` | `hash-115792ac89d97550d997761fac98106f27910657a55ea2ff26d0b9d70f4ced7f` | [package](https://testnet.cspr.live/contract-package/115792ac89d97550d997761fac98106f27910657a55ea2ff26d0b9d70f4ced7f) |
-| `AgentReputation` | `hash-b68085517c629331fbd0291b4ef8b7a92366e9c037eab7895a8766b2c5c7086b` | [package](https://testnet.cspr.live/contract-package/b68085517c629331fbd0291b4ef8b7a92366e9c037eab7895a8766b2c5c7086b) |
-| `MockUsd` | `hash-fe26bc8468bbed43d8b92e9d44d27fc93759a0ba4c65c60143cd8e0865a760bb` | [package](https://testnet.cspr.live/contract-package/fe26bc8468bbed43d8b92e9d44d27fc93759a0ba4c65c60143cd8e0865a760bb) |
+Use the package hashes below as the submission contract addresses. Package hashes are the stable identities across contract upgrades. If the form accepts only one address, submit `InvoiceRegistry`; it is Cortex's canonical lifecycle contract and the entry point for minting, funding, repayment recording, and claims.
+
+Verified against the active production configuration and Casper Testnet state on **2026-07-27**.
+
+| Contract | Role | Package hash | Explorer |
+| --- | --- | --- | --- |
+| `InvoiceRegistry` | Canonical lifecycle; primary submission address | `hash-e927cc878c81a521fc5e2bfc8dd163bf40071996703d656e1562fbe448f222b1` | [package](https://testnet.cspr.live/contract-package/e927cc878c81a521fc5e2bfc8dd163bf40071996703d656e1562fbe448f222b1) |
+| `FundingVault` | Investor funding and seller advances | `hash-9fabd34fa621fa2e8c8d701e7c144b3dc410437ff302122f0144221b46a73ca3` | [package](https://testnet.cspr.live/contract-package/9fabd34fa621fa2e8c8d701e7c144b3dc410437ff302122f0144221b46a73ca3) |
+| `RepaymentEscrow` | Repayment reserve and investor claims | `hash-115792ac89d97550d997761fac98106f27910657a55ea2ff26d0b9d70f4ced7f` | [package](https://testnet.cspr.live/contract-package/115792ac89d97550d997761fac98106f27910657a55ea2ff26d0b9d70f4ced7f) |
+| `AgentReputation` | Underwriter reputation and outcomes | `hash-b68085517c629331fbd0291b4ef8b7a92366e9c037eab7895a8766b2c5c7086b` | [package](https://testnet.cspr.live/contract-package/b68085517c629331fbd0291b4ef8b7a92366e9c037eab7895a8766b2c5c7086b) |
+| `MockUsd` | Six-decimal Testnet settlement asset | `hash-fe26bc8468bbed43d8b92e9d44d27fc93759a0ba4c65c60143cd8e0865a760bb` | [package](https://testnet.cspr.live/contract-package/fe26bc8468bbed43d8b92e9d44d27fc93759a0ba4c65c60143cd8e0865a760bb) |
+
+Copy-ready package hashes:
+
+```txt
+InvoiceRegistry: hash-e927cc878c81a521fc5e2bfc8dd163bf40071996703d656e1562fbe448f222b1
+FundingVault: hash-9fabd34fa621fa2e8c8d701e7c144b3dc410437ff302122f0144221b46a73ca3
+RepaymentEscrow: hash-115792ac89d97550d997761fac98106f27910657a55ea2ff26d0b9d70f4ced7f
+AgentReputation: hash-b68085517c629331fbd0291b4ef8b7a92366e9c037eab7895a8766b2c5c7086b
+MockUsd: hash-fe26bc8468bbed43d8b92e9d44d27fc93759a0ba4c65c60143cd8e0865a760bb
+```
+
+Current version-specific contract hashes:
+
+```txt
+InvoiceRegistry v1: contract-1d4f252c3c70c1e102004ab24d5470b88171636ce505797678df55f3b7518a5e
+FundingVault v1: contract-0aa5cd3a226f0963471ca822fe0b96b4586822471f2f09b74f0e40231b3ea0e8
+RepaymentEscrow v1: contract-2a8e0c36dff86b513d50f3c1588d84757de6bfb2e4b1172a9c0b407ab7162a03
+AgentReputation v1: contract-586c14dbbcd3fa85ed3b31df94512e82ecea26dd1e3762f1e4dec9b8020dcaff
+MockUsd v1: contract-17bf10dc49f6e11d638d64e5d79c468486ea8e70c30bf768625abe676fae369e
+```
 
 Deploy transactions:
 
