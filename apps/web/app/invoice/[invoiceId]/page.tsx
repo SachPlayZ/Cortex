@@ -68,8 +68,10 @@ export default async function InvoicePage({ params }: { params: Promise<{ invoic
       <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
         <Card>
           <CardHeader>
-            <ShieldCheckIcon className="text-primary" />
-            <CardTitle className="text-3xl tracking-normal">Terms</CardTitle>
+            <div className="flex items-center gap-3">
+              <ShieldCheckIcon className="size-6 shrink-0 text-primary" />
+              <CardTitle className="text-3xl tracking-normal">Terms</CardTitle>
+            </div>
             <CardDescription>All monetary values are displayed from integer cents.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
@@ -84,8 +86,10 @@ export default async function InvoicePage({ params }: { params: Promise<{ invoic
 
         <Card>
           <CardHeader>
-            <FingerprintIcon className="text-primary" />
-            <CardTitle className="text-3xl tracking-normal">Hashes and deploys</CardTitle>
+            <div className="flex items-center gap-3">
+              <FingerprintIcon className="size-6 shrink-0 text-primary" />
+              <CardTitle className="text-3xl tracking-normal">Hashes and deploys</CardTitle>
+            </div>
             <CardDescription>Private buyer data stays off-chain. Casper receives hashes and financial fields.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
@@ -116,8 +120,10 @@ export default async function InvoicePage({ params }: { params: Promise<{ invoic
 
       <Card>
         <CardHeader>
-          <BrainCircuitIcon className="text-primary" />
-          <CardTitle className="text-3xl tracking-normal">Agent trace</CardTitle>
+          <div className="flex items-center gap-3">
+            <BrainCircuitIcon className="size-6 shrink-0 text-primary" />
+            <CardTitle className="text-3xl tracking-normal">Agent trace</CardTitle>
+          </div>
           <CardDescription>Concrete outputs, not decorative AI status text.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3">

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { CasperWalletProvider } from "../components/casper-wallet";
 import { Nav } from "../components/nav";
+import { Toaster } from "../components/ui/sonner";
 import { TooltipProvider } from "../components/ui/tooltip";
 import "./globals.css";
 import { Geist } from "next/font/google";
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               <Nav />
               <main className="w-full max-w-full overflow-x-hidden">{children}</main>
             </div>
+            <Toaster />
           </TooltipProvider>
         </CasperWalletProvider>
       </body>

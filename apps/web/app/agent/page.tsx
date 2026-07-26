@@ -33,8 +33,10 @@ export default async function AgentPage() {
       <section className="grid gap-6 lg:grid-cols-[0.78fr_1.22fr]">
         <Card>
           <CardHeader>
-            <BrainCircuitIcon className="text-primary" />
-            <CardTitle className="text-2xl">Contract input policy</CardTitle>
+            <div className="flex items-center gap-3">
+              <BrainCircuitIcon className="size-6 shrink-0 text-primary" />
+              <CardTitle className="text-2xl">Contract input policy</CardTitle>
+            </div>
             <CardDescription>Raw model output never reaches Casper. Every material field passes the same deterministic gate.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">

@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { ArrowUpRightIcon, CheckCircle2Icon, CircleDollarSignIcon, ExternalLinkIcon, RadioTowerIcon, WalletIcon } from "lucide-react";
 import { formatUsd, type ReceivableView } from "../lib/finance";
+import { playSuccessChime } from "../lib/sound";
 import { useMockUsdBalance } from "../lib/use-mock-usd-balance";
 import { casperExplorerDeployUrl, shortAccount, useCasperWallet } from "./casper-wallet";
 import { StatusPill } from "./status-pill";
@@ -44,8 +46,6 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
   const wallet = useCasperWallet();
   const router = useRouter();
   const [busyAction, setBusyAction] = useState("");
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
   const [lastDeployHash, setLastDeployHash] = useState("");
   const [health, setHealth] = useState<CasperHealth | null>(null);
   const [invoice, setInvoice] = useState(initialInvoice);
@@ -91,9 +91,8 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
 
   async function runAction(route: string, confirmRoute: string, label: string) {
     setBusyAction(route);
-    setError("");
-    setMessage("");
     setLastDeployHash("");
+    let confirmedDeployHash = "";
     try {
       const actionRoutes =
         route === "fund"
@@ -118,6 +117,7 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
         }
 
         const submittedHash = await wallet.sendTransaction(preparedBody.transaction);
+        confirmedDeployHash = submittedHash;
         setLastDeployHash(submittedHash);
         const confirmResponse = await fetch(`/api/invoices/${invoice.id}/${action.confirmRoute}`, {
           method: "POST",
@@ -133,10 +133,10 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
         }
         if (confirmBody.invoice) setInvoice(confirmBody.invoice);
       }
-      setMessage(`${label} confirmed on Casper.`);
+      notifyTransactionConfirmed(`${label} confirmed on Casper.`, confirmedDeployHash);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : `${label} failed`);
+      notifyTransactionFailed(err instanceof Error ? err.message : `${label} failed`);
     } finally {
       setBusyAction("");
     }
@@ -144,8 +144,6 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
 
   async function requestFaucet() {
     setBusyAction("faucet");
-    setError("");
-    setMessage("");
     setLastDeployHash("");
     try {
       const response = await fetch("/api/casper/faucet", {
@@ -158,9 +156,9 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
         throw new Error(body.error ?? "Unable to request test mUSDC");
       }
       setLastDeployHash(body.deployHash);
-      setMessage(`Received ${formatUsd(body.amountUsdCents ?? "0")} test mUSDC.`);
+      notifyTransactionConfirmed(`Received ${formatUsd(body.amountUsdCents ?? "0")} test mUSDC.`, body.deployHash);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "mUSDC faucet failed");
+      notifyTransactionFailed(err instanceof Error ? err.message : "mUSDC faucet failed");
     } finally {
       setBusyAction("");
     }
@@ -265,27 +263,6 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
             </AlertDescription>
           </Alert>
         ) : null}
-
-        {message ? (
-          <Alert>
-            <AlertTitle>Transaction confirmed</AlertTitle>
-            <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
-              <span>{message}</span>
-              {lastDeployHash ? (
-                <Button variant="outline" size="sm" nativeButton={false} render={<a href={casperExplorerDeployUrl(lastDeployHash)} target="_blank" rel="noreferrer" />}>
-                  View transaction proof
-                  <ExternalLinkIcon data-icon="inline-end" />
-                </Button>
-              ) : null}
-            </AlertDescription>
-          </Alert>
-        ) : null}
-        {error ? (
-          <Alert variant="destructive">
-            <AlertTitle>Transaction failed</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
       </CardContent>
 
       <CardFooter className="flex-col items-start gap-4 md:flex-row md:items-center md:justify-between">
@@ -340,4 +317,21 @@ export function InvoiceLifecyclePanel({ invoice: initialInvoice, compact = false
       </CardFooter>
     </Card>
   );
+}
+
+function notifyTransactionConfirmed(message: string, deployHash: string) {
+  playSuccessChime();
+  toast.success(message, {
+    description: deployHash || undefined,
+    action: deployHash
+      ? {
+          label: "View proof",
+          onClick: () => window.open(casperExplorerDeployUrl(deployHash), "_blank", "noreferrer")
+        }
+      : undefined
+  });
+}
+
+function notifyTransactionFailed(message: string) {
+  toast.error("Transaction failed", { description: message });
 }

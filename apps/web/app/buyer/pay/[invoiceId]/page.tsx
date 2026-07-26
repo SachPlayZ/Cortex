@@ -71,8 +71,10 @@ export default async function BuyerPayPage({ params }: { params: Promise<{ invoi
 
         <Card>
           <CardHeader>
-            <CreditCardIcon className="text-primary" />
-            <CardTitle className="text-3xl tracking-normal">Dodo Test Mode</CardTitle>
+            <div className="flex items-center gap-3">
+              <CreditCardIcon className="size-6 shrink-0 text-primary" />
+              <CardTitle className="text-3xl tracking-normal">Dodo Test Mode</CardTitle>
+            </div>
             <CardDescription>Hosted checkout creates the payment. The webhook creates proof.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
