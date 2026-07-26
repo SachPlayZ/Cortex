@@ -273,6 +273,9 @@ export class CasperLifecycleClient {
     paidAmountUsdCents: string,
     relayer: CasperSigner
   ): Promise<string> {
+    // record_gateway_repayment cross-calls registry -> RepaymentEscrow, same as
+    // fund_invoice/cash_out_advance/claim_repayment - needs the raised payment ceiling
+    // or it reverts with "Out of gas error" under the flat single-contract-call default.
     return this.registry.call(
       relayer,
       "record_gateway_repayment",
@@ -281,7 +284,8 @@ export class CasperLifecycleClient {
         gateway_payment_hash: hashArg(gatewayPaymentHash),
         webhook_event_hash: hashArg(webhookEventHash),
         paid_amount_usd_cents: u256Arg(paidAmountUsdCents)
-      })
+      }),
+      CROSS_CONTRACT_PAYMENT_MOTES
     );
   }
 

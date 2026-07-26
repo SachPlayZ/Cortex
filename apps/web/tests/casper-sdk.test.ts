@@ -102,4 +102,23 @@ describe("CasperLifecycleClient canonical calls", () => {
     // prepare(publicKeyHex, entryPoint, args, paymentMotes) - 4th arg is the override
     expect(prepare.mock.calls.map((args) => args[3])).toEqual([8_000_000_000, 8_000_000_000, 8_000_000_000]);
   });
+
+  it("raises the payment ceiling for record_gateway_repayment, which also cross-calls RepaymentEscrow", async () => {
+    const call = vi.fn().mockResolvedValue("tx-repay");
+    const registry = { call } as unknown as CasperContractCaller;
+    const client = new CasperLifecycleClient(config, { registry });
+    const signer = { keyPath: "/tmp/relayer.pem" };
+
+    await client.recordGatewayRepayment(
+      `0x${"55".repeat(32)}`,
+      `0x${"66".repeat(32)}`,
+      `0x${"77".repeat(32)}`,
+      "100000",
+      signer
+    );
+
+    expect(call.mock.calls[0]?.[1]).toBe("record_gateway_repayment");
+    // call(signer, entryPoint, args, paymentMotes) - 4th arg is the override
+    expect(call.mock.calls[0]?.[3]).toBe(8_000_000_000);
+  });
 });

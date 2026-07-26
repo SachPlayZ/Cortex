@@ -114,6 +114,18 @@ export class CasperSdkSettlementClient implements CasperSettlementClient {
     }
 
     let deployHash = invoice.lastRepaymentDeployHash;
+    if (deployHash) {
+      // A hash from a prior attempt exists, but a reverted transaction still gets a
+      // real hash (e.g. the out-of-gas revert this exact entrypoint used to hit before
+      // its payment ceiling was raised). Verify it actually succeeded before trusting
+      // it - otherwise every retry re-polls the same dead transaction forever and never
+      // resubmits.
+      try {
+        await this.waitForTransaction(deployHash);
+      } catch {
+        deployHash = undefined;
+      }
+    }
     if (!deployHash) {
       deployHash = await this.lifecycle.recordGatewayRepayment(
         input.invoiceId,
@@ -123,8 +135,8 @@ export class CasperSdkSettlementClient implements CasperSettlementClient {
         this.config.relayerSigner
       );
       await this.store.updateInvoice(input.invoiceId, { lastRepaymentDeployHash: deployHash });
+      await this.waitForTransaction(deployHash);
     }
-    await this.waitForTransaction(deployHash);
     await this.store.updateInvoice(input.invoiceId, {
       statusCasper: "Repaid",
       lastRepaymentDeployHash: deployHash,

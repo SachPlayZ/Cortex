@@ -185,6 +185,14 @@ export class CasperChainSyncService {
     }
 
     next.statusLastSyncedAt = new Date().toISOString();
+    // The event-dictionary walk above lags behind SettlementRelayer's direct on-chain
+    // confirmation (a separate, faster path that patches statusCasper immediately after
+    // record_gateway_repayment succeeds - see settlement-relayer.ts). If this resync runs
+    // before the indexer's cursor reaches that event, next.statusCasper would be stale and
+    // silently regress an already-more-advanced status back down. Only ever move forward.
+    if (next.statusCasper) {
+      next.statusCasper = laterInvoiceStatus(invoice.statusCasper, next.statusCasper);
+    }
     return paymentStore.updateInvoice(invoiceId, next);
   }
 
@@ -457,6 +465,25 @@ function sanitizeCasperEventName(value: string): string {
 
 function toAccountHash(publicKeyHex: string): string {
   return casperSdk.PublicKey.fromHex(publicKeyHex).accountHash().toPrefixedString();
+}
+
+const LINEAR_INVOICE_STATUS_ORDER: readonly InvoiceStatus[] = [
+  "Created",
+  "Scored",
+  "Listed",
+  "Funded",
+  "RepaymentPending",
+  "Repaid",
+  "Settled"
+];
+
+export function laterInvoiceStatus(current: InvoiceStatus, candidate: InvoiceStatus): InvoiceStatus {
+  const currentRank = LINEAR_INVOICE_STATUS_ORDER.indexOf(current);
+  const candidateRank = LINEAR_INVOICE_STATUS_ORDER.indexOf(candidate);
+  // Either side is a terminal/exception status outside the linear happy path
+  // (Rejected, Cancelled, Defaulted, Disputed) - don't rank-compare those, just apply it.
+  if (currentRank === -1 || candidateRank === -1) return candidate;
+  return candidateRank >= currentRank ? candidate : current;
 }
 
 function stripContractPrefix(value: string): string {

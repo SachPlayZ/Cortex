@@ -3,6 +3,7 @@ import {
   bootstrapStatusId,
   casperDeploymentScope,
   isCanonicalRegistryEvent,
+  laterInvoiceStatus,
   mockUsdBalanceDictionaryKey,
   mockUsdUnitsToUsdCents,
   parseLifecycleEvent
@@ -79,6 +80,25 @@ describe("Casper Odra event decoding", () => {
     expect(mockUsdUnitsToUsdCents([5, 0, 242, 5, 42, 1])).toBe("500000");
     expect(mockUsdUnitsToUsdCents([0])).toBe("0");
     expect(mockUsdUnitsToUsdCents([])).toBe("0");
+  });
+
+  it("never regresses status: event-derived resync can't undo SettlementRelayer's direct Repaid patch", () => {
+    // SettlementRelayer patches statusCasper: "Repaid" the moment record_gateway_repayment
+    // confirms on-chain, ahead of the event-dictionary indexer. A resync that only saw
+    // events up through InvoiceFunded must not drag status back to RepaymentPending.
+    expect(laterInvoiceStatus("Repaid", "RepaymentPending")).toBe("Repaid");
+    expect(laterInvoiceStatus("Settled", "Repaid")).toBe("Settled");
+  });
+
+  it("still advances status forward once the resync catches up", () => {
+    expect(laterInvoiceStatus("RepaymentPending", "Repaid")).toBe("Repaid");
+    expect(laterInvoiceStatus("Created", "Settled")).toBe("Settled");
+    expect(laterInvoiceStatus("Listed", "Listed")).toBe("Listed");
+  });
+
+  it("applies terminal/exception statuses outright since they're not on the linear happy path", () => {
+    expect(laterInvoiceStatus("RepaymentPending", "Defaulted")).toBe("Defaulted");
+    expect(laterInvoiceStatus("Rejected", "Created")).toBe("Created");
   });
 });
 
