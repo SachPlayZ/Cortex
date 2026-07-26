@@ -107,7 +107,7 @@ export function PaymentReturnStatus({ invoiceId }: { invoiceId: string }) {
 function PaymentResultLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-dvh px-5 pb-24 pt-32 md:px-8 md:pt-36">
-      <Card className="mx-auto min-h-[62dvh] max-w-3xl items-center justify-center text-center">
+      <Card className="mx-auto min-h-[62dvh] max-w-3xl justify-center text-center">
         <CardHeader className="items-center gap-6">
           {children}
         </CardHeader>
