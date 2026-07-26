@@ -220,9 +220,10 @@ export async function handleDodoWebhook(params: {
     );
     payload = webhook.verify(params.rawBody, params.headers);
   } catch (error) {
-    if (error instanceof WebhookVerificationError || error instanceof Error) {
-      return { outcome: "rejected", reason: "invalid_signature" };
-    }
+    console.error("Dodo webhook rejected: invalid_signature", {
+      webhookId: params.headers["webhook-id"],
+      message: error instanceof Error ? error.message : String(error)
+    });
     return { outcome: "rejected", reason: "invalid_signature" };
   }
 
@@ -232,14 +233,17 @@ export async function handleDodoWebhook(params: {
     params.now?.() ?? new Date()
   );
   if (normalized.event_type !== SUCCESSFUL_DODO_EVENT_TYPE) {
+    console.error("Dodo webhook rejected: not_successful_payment", { eventType: normalized.event_type });
     return { outcome: "rejected", reason: "not_successful_payment" };
   }
   const parsed = DodoWebhookEventSchema.safeParse(normalized);
   if (!parsed.success) {
+    console.error("Dodo webhook rejected: invalid_payload", { issues: parsed.error.flatten() });
     return { outcome: "rejected", reason: "invalid_payload" };
   }
   const event = parsed.data;
   if (event.status.toLowerCase() !== "succeeded") {
+    console.error("Dodo webhook rejected: not_successful_payment", { status: event.status });
     return { outcome: "rejected", reason: "not_successful_payment" };
   }
 
@@ -256,18 +260,39 @@ export async function handleDodoWebhook(params: {
   try {
     invoice = await params.store.requireInvoice(event.metadata.invoice_id);
   } catch {
+    console.error("Dodo webhook rejected: unknown_invoice", { invoiceId: event.metadata.invoice_id, paymentId: event.payment_id });
     return { outcome: "rejected", reason: "unknown_invoice" };
   }
   if (event.metadata.invoice_hash !== invoice.invoiceHash) {
+    console.error("Dodo webhook rejected: invoice_hash_mismatch", {
+      invoiceId: invoice.id,
+      metadataHash: event.metadata.invoice_hash,
+      recordHash: invoice.invoiceHash
+    });
     return { outcome: "rejected", reason: "invoice_hash_mismatch" };
   }
   if (event.metadata.expected_amount_usd_cents !== invoice.repaymentAmountUsdCents) {
+    console.error("Dodo webhook rejected: metadata_amount_mismatch", {
+      invoiceId: invoice.id,
+      metadataAmount: event.metadata.expected_amount_usd_cents,
+      recordAmount: invoice.repaymentAmountUsdCents
+    });
     return { outcome: "rejected", reason: "metadata_amount_mismatch" };
   }
   if (!invoice.dodoNonce || event.metadata.nonce !== invoice.dodoNonce) {
+    console.error("Dodo webhook rejected: checkout_nonce_mismatch", {
+      invoiceId: invoice.id,
+      metadataNonce: event.metadata.nonce,
+      recordNonce: invoice.dodoNonce
+    });
     return { outcome: "rejected", reason: "checkout_nonce_mismatch" };
   }
   if (BigInt(event.amount_usd_cents) < BigInt(invoice.repaymentAmountUsdCents)) {
+    console.error("Dodo webhook rejected: underpayment", {
+      invoiceId: invoice.id,
+      paidAmount: event.amount_usd_cents,
+      requiredAmount: invoice.repaymentAmountUsdCents
+    });
     return { outcome: "rejected", reason: "underpayment" };
   }
 
@@ -276,6 +301,7 @@ export async function handleDodoWebhook(params: {
     : await params.casper.getInvoice(invoice.id);
   const casperStatus = "statusCasper" in casperInvoice ? casperInvoice.statusCasper : casperInvoice.status;
   if (casperStatus !== "RepaymentPending") {
+    console.error("Dodo webhook rejected: casper_status_not_repayment_pending", { invoiceId: invoice.id, casperStatus });
     return { outcome: "rejected", reason: "casper_status_not_repayment_pending" };
   }
 
