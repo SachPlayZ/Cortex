@@ -1,5 +1,37 @@
 # Todo
 
+## Plan — Cortex social visuals
+
+- [x] Create a 1200×630 OG banner using the existing Cortex mark and product palette.
+- [x] Create a 1280×720 YouTube thumbnail with stronger, high-contrast storytelling.
+- [x] Save both assets under `apps/web/public` without replacing existing files.
+
+## Verification — Cortex social visuals
+
+- [x] Confirm dimensions, copy legibility, logo fidelity, and safe margins.
+- [x] Inspect both final renders and run `git diff --check`.
+
+## Review — Cortex social visuals
+
+### Changed
+
+- Added a text-free verified-ledger OG banner using the selected generated artwork.
+- Added a high-contrast invoice-to-on-chain-capital YouTube thumbnail.
+
+### Verified
+
+- OG: 1200×630 PNG; thumbnail: 1280×720 PNG.
+- Inspected full-size and social-size previews; copy and mark remain legible.
+- `git diff --check` passes.
+
+### Risks
+
+- None identified.
+
+### Follow-ups
+
+- Wire the OG asset into Next.js metadata if desired.
+
 ## Plan — Fix production PDF underwriting
 
 - [x] Reproduce the Vercel `DOMMatrix` failure and identify the missing runtime dependency.

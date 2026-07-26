@@ -2,6 +2,8 @@
 
 ## Pattern
 
+- Mistake: Added a composed text treatment when the requested generated OG artwork was preferred as-is.
+- Rule: For generated social artwork, preserve the selected raw image unless the user explicitly requests typography or a branded text overlay.
 - Mistake: Interpreted "local OCR" as OS-native tooling instead of package-based OCR.
 - Rule: When user contrasts "local" with hosted model OCR, prefer in-repo/package runtime first; avoid OS-specific tooling unless user asks.
 - Mistake: Production PDF underwriting externalized `pdf-parse` without tracing its dynamically loaded native canvas dependency.
